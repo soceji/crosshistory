@@ -7,6 +7,10 @@ const {W,H,N,cellId,PLON,PLAT,PAREA,PTER,PNAME}=MAP;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const KG={'戰':'전쟁','政':'정치','外':'외교','兵':'군사','學':'학문','災':'재해','文':'문화','商':'경제','通':'교통','社':'사회','工':'산업','農':'농업','震':'지진','火':'화산','寒':'냉해','漁':'어로','石':'거석','疫':'역병','旱':'가뭄','獵':'사냥','爭':'다툼','水':'홍수','交':'교역','巫':'신앙','獸':'짐승','舟':'항해','天':'천문','人':'인물','史':'역사','王':'군주','亡':'멸망','名':'국호','和':'강화','技':'기술','報':'소식','合':'통합','裂':'분열','興':'건국','將':'장수','港':'항구','路':'도로','拓':'개척','變':'개변','債':'파산','亂':'반란','統':'통계','淸':'청렴','勝':'승리','敗':'패배','助':'도움','衛':'위생','醫':'의료','天':'천문','獵':'사냥','巫':'신앙'};
+const kg=g=>KG[g]||g||'';
+const ga=w=>{ const k=w.charCodeAt(w.length-1)-0xAC00; return w+(k>=0&&k<11172&&k%28?'이':'가'); };
+const ini=n=>String(n||'').replace(/^[^가-힣A-Za-z]*/,'').charAt(0);
 function setHTML(el,h){ if(el._h===h) return false; el._h=h; el.innerHTML=h; return true; }
 const SPEEDS=[1,2,3,5,10,15,30], DPS=8; // 1배속 = 초당 8일
 let G=null, speed=0, lastSpeed=1, ff=false, modalOpen=false, tab='state', sel=-1, mode='pol', selArmy=null;
@@ -63,6 +67,7 @@ class MapView{
     const own=g.owner, d=this.d32, W2=W*2, mode=this.mode=mode_(this);
     const pc=new Uint32Array(N); const pcol=new Array(N);
     const P=g.player, exp=ENG.expectedTech(g.y);
+    if(mode==='hea'){ g._infP=new Uint8Array(N); for(const e of (g.epi||[])) for(const k in e.inf) g._infP[+k]=1; }
     const ccol=g.C.map(c=>rgb(c.col));
     for(let p=0;p<N;p++){
       const o=own[p]; let c;
@@ -72,6 +77,7 @@ class MapView{
       else if(mode==='log'){ const P_=g.C[P]; const lv=g.road?g.road[p]:0; const sp=P_._sup&&g.wars.some(w=>w.a===P||w.b===P)?P_._sup[p]:null;
         if(sp!=null) c=mix([150,60,48],[120,170,110],sp); else c= o<0? mix(TERR[PTER[p]],[20,28,34],0.5) : mix([34,44,52],[240,207,134],lv/5); }
       else if(mode==='res'){ const base=o<0? TERR[PTER[p]] : mix(ccol[o],[30,38,44],0.55); const rk=clamp(MAP.PSEIS[p]*120,0,1); c=mix(base,[150,60,48],rk*0.75); }
+      else if(mode==='hea'){ if(o<0) c=[34,42,48]; else { const v=clamp((g.C[o].san||0)/5,0,1); c=mix([120,104,70],[92,170,160],v); } if(g._infP&&g._infP[p]) c=mix(c,[200,50,40],0.65); }
       else if(mode==='dip'){ if(o<0) c=[34,42,48]; else if(o===P) c=GOLD; else { const w=ENG.findWar(g,P,o); if(w) c=SEAL; else if(g.C[P].truce[o]>g.day) c=[120,104,150]; else c=[80,92,100]; } }
       pcol[p]=c; pc[p]=pack(c[0],c[1],c[2]);
     }
@@ -157,13 +163,16 @@ class MapView{
       ctx.font=`700 ${Math.max(11,fs+2)}px sans-serif`;
       D.VOLCANOES.forEach(v=>{ const [x,y]=this.toScreen((v[1]-MAP.lon0)/MAP.res,(MAP.lat0-v[2])/MAP.res); if(x<-20||x>this.cw+20||y<-20||y>this.ch+20) return; ctx.strokeStyle='rgba(8,11,14,.8)'; ctx.lineWidth=3; ctx.strokeText('▲',x,y); ctx.fillStyle='#e0664f'; ctx.fillText('▲',x,y); });
     }
+    // 역병이 도는 지방
+    if(g.epi&&g.epi.length){ const s2=Math.max(2.5,Math.min(5,s*1.2)); ctx.fillStyle='rgba(214,58,46,.85)'; ctx.strokeStyle='rgba(8,11,14,.8)'; ctx.lineWidth=1;
+      for(const e of g.epi) for(const k in e.inf){ const p=+k; const [x,y]=this.toScreen(PCX[p],PCY[p]); if(x<-10||x>this.cw+10||y<-10||y>this.ch+10) continue; ctx.beginPath(); ctx.arc(x+6,y-6,s2,0,7); ctx.fill(); ctx.stroke(); } }
     // 수도
     if(P.cap>=0){ const [x,y]=this.toScreen(PCX[P.cap],PCY[P.cap]); ctx.fillStyle='#f0cf86'; ctx.strokeStyle='#1b1407'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,4.5,0,7); ctx.fill(); ctx.stroke(); }
     // 작전 표시
     const ring=(p,prog,color,glyph)=>{ const [x,y]=this.toScreen(PCX[p],PCY[p]); ctx.lineWidth=3; ctx.strokeStyle='rgba(8,11,14,.7)'; ctx.beginPath(); ctx.arc(x,y,10,0,7); ctx.stroke(); ctx.strokeStyle=color; ctx.beginPath(); ctx.arc(x,y,10,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(prog,0,1)); ctx.stroke(); ctx.fillStyle=color; ctx.font=`700 11px 'Noto Serif KR',serif`; ctx.fillText(glyph,x,y+0.5); };
-    for(const op of g.ops) if(op.by===g.player) ring(op.p,op.prog,'#f0cf86','拓');
-    for(const op of g.ops) if(op.by===g.player&&op.type==='road') ring(op.p,op.prog,'#c3bcac','路');
-    for(const k in (g.sieges||{})){ const sg=g.sieges[k]; const pp=+k; if(sg.o===g.player) ring(pp,sg.prog,'#f0cf86','攻'); else if(g.owner[pp]===g.player) ring(pp,sg.prog,'#e0664f','危'); }
+    for(const op of g.ops) if(op.by===g.player) ring(op.p,op.prog,'#f0cf86','개');
+    for(const op of g.ops) if(op.by===g.player&&op.type==='road') ring(op.p,op.prog,'#c3bcac','도');
+    for(const k in (g.sieges||{})){ const sg=g.sieges[k]; const pp=+k; if(sg.o===g.player) ring(pp,sg.prog,'#f0cf86','공'); else if(g.owner[pp]===g.player) ring(pp,sg.prog,'#e0664f','위'); }
     this.drawArmies(g,ctx,s);
   }
   drawArmies(g,ctx,s){
@@ -178,7 +187,7 @@ class MapView{
       const [dx,dy]=this.toScreen(PCX[a.path[a.path.length-1].p],PCY[a.path[a.path.length-1].p]); ctx.fillStyle='#f6dc9c'; ctx.beginPath(); ctx.arc(dx,dy,3.5,0,7); ctx.fill(); }
     // 전투
     ctx.font="700 16px 'Noto Serif KR',serif";
-    for(const b of g.battles||[]){ if(!showAll&&b.ao!==P&&b.do!==P) continue; const [x,y]=this.toScreen(PCX[b.p],PCY[b.p]); ctx.lineWidth=3; ctx.strokeStyle='rgba(8,11,14,.8)'; ctx.strokeText('戰',x,y-22); ctx.fillStyle='#e0664f'; ctx.fillText('戰',x,y-22); }
+    for(const b of g.battles||[]){ if(!showAll&&b.ao!==P&&b.do!==P) continue; const [x,y]=this.toScreen(PCX[b.p],PCY[b.p]); ctx.lineWidth=3; ctx.strokeStyle='rgba(8,11,14,.8)'; ctx.strokeText('⚔',x,y-22); ctx.fillStyle='#e0664f'; ctx.fillText('⚔',x,y-22); }
     ctx.font="600 10.5px 'IBM Plex Mono',monospace";
     for(const a of g.armies){
       const mine=a.o===P, foe=en.has(a.o); if(!mine&&!foe&&!showAll) continue;
@@ -255,7 +264,7 @@ function startGame(g,intro){
 function buildChrome(){
   $('#speeds').innerHTML=`<button class="pause" data-s="0" aria-label="일시정지">❚❚</button>`+SPEEDS.map(s=>`<button data-s="${s}">${s}×</button>`).join('');
   $('#speeds').onclick=e=>{ const b=e.target.closest('button'); if(b) setSpeed(+b.dataset.s); };
-  $('#modes').innerHTML=[['pol','정치'],['pop','인구 밀도'],['tech','기술 수준'],['dip','외교'],['res','자원·재해'],['log','도로·병참']].map(([k,n])=>`<button data-m="${k}" class="${k===mode?'on':''}">${n}</button>`).join('');
+  $('#modes').innerHTML=[['pol','정치'],['pop','인구 밀도'],['tech','기술 수준'],['dip','외교'],['res','자원·재해'],['log','도로·병참'],['hea','보건']].map(([k,n])=>`<button data-m="${k}" class="${k===mode?'on':''}">${n}</button>`).join('');
   $('#modes').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; mode=b.dataset.m; $('#modes').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); mv.ver=-1; renderLegend(); };
   const TABS=[['state','국정'],['tech','기술'],['inst','제도'],['dip','외교·전쟁'],['fig','인물'],['chron','연대기']];
   $('#tabs').innerHTML=TABS.map(([k,n])=>`<button data-t="${k}" class="${k===tab?'on':''}">${n}</button>`).join('');
@@ -275,6 +284,7 @@ function renderLegend(){
   if(mode==='tech') L.innerHTML=`실제 역사의 같은 해 대비 기술 수<div class="ramp" style="background:linear-gradient(90deg,#4678aa,#787c7e,#e2b250)"></div><div class="ends"><span>−12</span><span>역사 수준</span><span>+12</span></div>`;
   if(mode==='res') L.innerHTML=`<div style="margin-bottom:4px">지하자원 <span class="muted">(색이 채워진 것 = 지금 기술로 쓸 수 있음)</span></div><div style="display:grid;grid-template-columns:repeat(3,auto);gap:3px 10px">${Object.values(D.RES).map(r=>`<span><b style="color:${r.col};font-family:var(--f-display)">${r.g}</b> ${r.n}</span>`).join('')}</div><div style="margin-top:6px"><span style="color:#e0664f">▲</span> 화산 · <span style="display:inline-block;width:10px;height:10px;background:#96503c;vertical-align:middle"></span> 지진 위험이 높은 곳</div>`;
   if(mode==='log') L.innerHTML=G&&G.wars.some(w=>w.a===G.player||w.b===G.player)?`우리 군의 병참 지원률 (주요 지방에서 도로를 따라 잰 거리)<div class="ramp" style="background:linear-gradient(90deg,#963c30,#78aa6e)"></div><div class="ends"><span>끊김</span><span>50%</span><span>100%</span></div>`:`도로 등급<div class="ramp" style="background:linear-gradient(90deg,#222c34,#f0cf86)"></div><div class="ends"><span>오솔길</span><span>역참</span><span>고속도로</span></div><div style="margin-top:4px">⚓ 항구 (숫자 = 등급)</div>`;
+  if(mode==='hea') L.innerHTML=`나라의 위생 수준<div class="ramp" style="background:linear-gradient(90deg,#78684a,#5caaa0)"></div><div class="ends"><span>0</span><span>2.5</span><span>5</span></div><div style="margin-top:4px"><span style="display:inline-block;width:10px;height:10px;background:#c8322a;vertical-align:middle"></span> 지금 역병이 도는 지방</div>`;
   if(mode==='dip') L.innerHTML=`<div style="display:grid;grid-template-columns:12px 1fr;gap:4px 8px;align-items:center"><i style="width:12px;height:12px;background:#d6a94f"></i>우리 나라<i style="width:12px;height:12px;background:#c4452f"></i>교전국<i style="width:12px;height:12px;background:#786896"></i>휴전 중<i style="width:12px;height:12px;background:#505c64"></i>기타 국가</div>`;
 }
 function setSpeed(s){ if(s>0) lastSpeed=s; speed=s; if(s===0) ff=false; updateTop(); }
@@ -300,7 +310,7 @@ function updateTop(){
   ].map(([k,v])=>`<div class="pill" style="width:${PW_[k]||80}px"><span class="k">${k}</span><span class="v">${v}</span></div>`).join(''));
   // 티커
   const ns=G.news.slice(-7).reverse();
-  setHTML($('#ticker'),ns.map(n=>`<span class="tk"><b>${esc(n.g)}</b><span class="y">${n.y}</span>${esc(n.t)}</span>`).join(''));
+  setHTML($('#ticker'),ns.map(n=>`<span class="tk"><b>${esc(kg(n.g))}</b><span class="y">${n.y}</span>${esc(n.t)}</span>`).join(''));
 }
 
 // ── 지방 카드 ──
@@ -386,6 +396,7 @@ function renderCard(){
   if(!setHTML(el,`<button class="x" id="pcx" aria-label="닫기">×</button><h3>${esc(PNAME[p])}</h3>
    <div class="own">${c?`<i style="background:${c.col}"></i>${esc(c.name)}`:'<i style="background:#4a4f45"></i>주인 없는 땅 (원주민 거주)'}</div>
    <dl><dt>인구</dt><dd>${fpop(G.pop[p])}</dd><dt>부양 한계</dt><dd>${fpop(K)}</dd><dt>면적</dt><dd>${Math.round(PAREA[p]).toLocaleString()} km²</dd><dt>지형</dt><dd style="font-family:var(--f-body)">${D.TERRAIN[PTER[p]].n}${MAP.PCOAST[p]?' · 해안':''}</dd><dt>좌표</dt><dd>${PLAT[p].toFixed(1)}°, ${PLON[p].toFixed(1)}°</dd></dl>
+   ${(()=>{ const ei=ENG.epiInfo(G,p); return ei.length?`<p class="factline" style="border-color:var(--seal);margin:6px 0">역병: ${ei.map(x=>`${esc(x.n)} (${x.t+1}/${x.mo}개월째)`).join(', ')}</p>`:''; })()}
    ${provNature(p,P)}
    <div class="acts">${acts}</div>`)) return;
   $('#pcx').onclick=()=>selectProv(-1);
@@ -434,6 +445,21 @@ function realRef(P){
   if(P.tag==='DPRK') return null;
   return {n:'실제 한반도 인구 (추정)',t:D.STATS.koreaPop};
 }
+function paneHealth(P){
+  const san=P.san||0; const act=(G.epi||[]); const mine=act.filter(e=>Object.keys(e.inf).some(k=>G.owner[+k]===G.player));
+  const sc=ENG.sanCost(P); const full=(P.sanInv||0)>=2;
+  const m=P.epiM&&P.epiM.until>G.day?P.epiM:null;
+  const fx=d=>{ const f=ENG.epiFx(G,P,D.DISEASES[d]); return `감염 ×${f.inf.toFixed(2)} · 사망 ×${f.cfr.toFixed(2)}`; };
+  return `<h4>보건 <span class="s">위생 수준이 높을수록 역병이 덜 번지고 덜 죽는다</span></h4>
+  <div class="cur"><div class="row" style="justify-content:space-between"><b class="serif" style="font-size:18px;color:${san>=3?'var(--good)':san>=1.5?'var(--warn)':'var(--bad)'}">위생 ${san.toFixed(1)} / 5</b><span class="sub">역병 사망 누계 ${fpop(P.epiDeaths||0)}</span></div>
+   <div class="bar"><i style="width:${san/5*100}%;background:#5caaa0"></i></div>
+   <div class="sub" style="margin-top:6px">물로 옮는 병(장티푸스·콜레라): ${fx('cholera')}<br>숨으로 옮는 병(천연두·독감): ${fx('smallpox')}</div>
+   <div class="sub">기술(의학·세균학·항생제…)·제도(공중위생·상하수도·검역·예방접종)·위생 사업이 위생 수준을 올린다.</div>
+   <button class="btn" id="sanInv" style="width:100%;margin-top:8px" ${!full&&P.gold>=sc?'':'disabled'}>${full?'위생 사업 최대 (+2.0)':`위생 사업 (위생 +0.5, 유지비 GDP의 0.08%)`} <small>${full?'':fmoney(sc)}</small></button>
+   ${m?`<div class="sub" style="margin-top:4px">시행 중인 방역: 전파 ×${m.sp.toFixed(2)} · 유입 ×${m.in.toFixed(2)} · 사망 ×${m.dm.toFixed(2)} (${Math.ceil((m.until-G.day)/30)}개월 남음)</div>`:''}</div>
+  ${act.length?`<div style="margin-top:6px">${act.map(e=>{ const n=Object.keys(e.inf).length; const my=Object.keys(e.inf).filter(k=>G.owner[+k]===G.player).length; return `<div class="res-row"><span style="color:${my?'var(--bad)':'var(--muted)'}">●</span><span>${esc(e.n)}</span><span class="sub" style="margin-left:auto">${n}개 지방${my?` · 우리 땅 ${my}곳`:''} · 사망 ${fpop(e.deaths)}</span></div>`; }).join('')}</div>`:'<p class="sub">지금 세계에 크게 도는 역병은 없다.</p>'}
+  ${mine.length?`<p class="factline" style="border-color:var(--seal)">우리 땅에 역병이 돌고 있다. 지도 「보건」에서 퍼지는 모습을 볼 수 있다.</p>`:''}`;
+}
 function paneNature(P){
   const kn=id=>P.techs.has(id); const rc=P.resCnt||{}; const keys=Object.keys(rc);
   const rows=keys.sort((a,b)=>(P.resVal[b]||0)-(P.resVal[a]||0)).map(r=>{ const R=D.RES[r]; const v=P.resVal[r]||0; const on=v>0;
@@ -449,7 +475,7 @@ function paneNature(P){
   ${cools.length?`<p class="sub">화산 냉각 중: ${cools.map(c=>`${esc(c.label)} ${c.dT}°C`).join(', ')}</p>`:''}
   <p class="sub">추우면 고위도의 부양력이, +1°C를 넘게 더우면 열대의 부양력이 줄어든다. 1850년 이후 기온은 세계 경제의 화석연료 의존도를 따라 실제 역사보다 빨라지거나 느려진다.</p>
 <!--§--><div class="chart" id="ch3"></div><!--§-->
-  ${dis.length?`<h4>최근 재해</h4>`+dis.map(d=>`<div class="res-row"><span style="color:${d.t==='화산'?'#e0664f':'#c3bcac'};font-family:var(--f-display);font-weight:700">${d.t==='화산'?'火':'震'}</span><span>${fy(d.y)} ${esc(d.name)} <span class="muted">${d.t==='화산'?'VEI '+d.M:'규모 '+d.M.toFixed(1)}</span></span><span class="num muted" style="margin-left:auto;font-size:12px">${fpop(d.deaths)}</span></div>`).join(''):''}`;
+  ${dis.length?`<h4>최근 재해·역병</h4>`+dis.map(d=>`<div class="res-row"><span class="badge" style="color:${d.t==='화산'?'#e0664f':d.t==='역병'?'#d65a4a':'#c3bcac'}">${d.t}</span><span>${fy(d.y)} ${esc(d.name)} <span class="muted">${d.t==='역병'?'':d.t==='화산'?'VEI '+d.M:'규모 '+d.M.toFixed(1)}</span></span><span class="num muted" style="margin-left:auto;font-size:12px">${fpop(d.deaths)}</span></div>`).join(''):''}`;
 }
 function paneState(P){
   const R=P.ruler, age=R?G.y-R.born:0;
@@ -482,16 +508,18 @@ function paneState(P){
   <div class="cur"><div class="row" style="justify-content:space-between"><b class="serif" style="font-size:18px;color:${P.corr>40?'var(--bad)':P.corr>20?'var(--warn)':'var(--good)'}">${Math.round(P.corr||0)}%</b><span class="sub">이대로면 ${Math.round(P.corrT||0)}%로 수렴</span></div>
    <div class="bar"><i style="width:${Math.min(100,P.corr||0)}%;background:${P.corr>40?'var(--seal)':'var(--warn)'}"></i></div>
    <div class="sub" style="margin-top:6px">세수 −${Math.round((P.corr||0)*0.6)}% · 생산 −${Math.round((P.corr||0)*0.25)}% · 연구 −${Math.round((P.corr||0)*0.25)}%</div>
+   <div class="sub">군대 유지비 ×${(P.armyMul_||1).toFixed(2)} — 부패가 클수록 군량과 군포가 중간에서 새어 나가 급격히 불어난다.</div>
    <div class="sub">정체 기본 ${D.GOV_CORR[P.gov]||15}% + 영토 ${P.prov}곳 + 제도의 질 + 불안정 − 제도·기술·인물</div>
    <button class="btn" id="anticorr" style="width:100%;margin-top:8px" ${P.gold>=ENG.corrCost(P)?'':'disabled'}>부패 척결 (−8%p, 안정도 −0.2) <small>${fmoney(ENG.corrCost(P))}</small></button>
    <div class="sub" style="margin-top:4px">영토가 넓을수록 척결 비용이 커진다 (지방 ${P.prov}곳 → 비용 ×${(1+P.prov/12).toFixed(1)}).</div></div>
+  ${paneHealth(P)}
   <h4>항구 교역 <span class="s">GDP의 ${P.gdp>0?((P.portIncome||0)/P.gdp*100).toFixed(1):0}%</span></h4>
   <p class="sub" style="margin-top:0">항구 ${P.portN||0}곳 · 연 교역 수입 ${fmoney(P.portIncome||0)}. 항구 등급 × 적합도(해안선 길이, 바다 이웃, 결빙, 옛 항구 도시)만큼 수입이 생긴다. 항구가 있는 해안은 바다 건너 병참도 쉽다.</p>
   ${paneNature(P)}
   <h4>군대 <span class="s">인구 대비 상비 병력 비율</span></h4>
   <div class="slider"><div class="row"><span>동원율</span><b class="num" id="mobv">${(P.mob*100).toFixed(1)}%</b></div>
    <input type="range" id="mob" min="0.2" max="8" step="0.1" value="${(P.mob*100).toFixed(1)}" aria-label="동원율">
-   <div class="row sub"><span>목표 병력 ${fmoney(P.pop*P.mob*Math.max(0.2,1+P.m.manp))}명</span><span>유지비 연 ${fmoney(P.soldiers*P.gdppc*2)}</span></div></div>
+   <div class="row sub"><span>목표 병력 ${fmoney(P.pop*P.mob*Math.max(0.2,1+P.m.manp))}명</span><span>유지비 연 ${fmoney(P.armyCost||0)}${(P.armyMul_||1)>1.05?` <b style="color:${P.armyMul_>1.6?'var(--bad)':'var(--warn)'}">(부패 ×${P.armyMul_.toFixed(2)})</b>`:''}</span></div></div>
   <h4>인구 <span class="s">${real?`우리 나라 vs ${real.n}`:'우리 나라'}</span></h4>
 <!--§--><div class="chart" id="ch1"></div><!--§-->
   <h4>세계 인구 <span class="s">당신의 세계 vs 실제 역사 (지금 ${fpop(wp)} / 실제 ${fpop(wr)})</span></h4>
@@ -524,7 +552,7 @@ function paneTech(P){
     <div class="bar"><i style="width:${clamp(P.prog/cost,0,1)*100}%"></i></div>
     <div class="sub" style="margin-top:4px">하루 연구 ${rr.toFixed(1)} · 남은 기간 약 ${left>730?(left/365).toFixed(1)+'년':Math.round(left)+'일'}</div>`:'<span class="sub">연구할 기술을 고르라. 고르지 않으면 「연구 방향」에 따라 자동으로 고른다.</span>'}</div>
   <h4>연구 방향 <span class="s">자동 선택 시 이 분야를 우선한다</span></h4>
-  <div class="focus" id="focus"><button class="chip ${!P.focus?'on':''}" data-c="">균형</button>${Object.entries(D.CATS).map(([k,c])=>`<button class="chip ${P.focus===k?'on':''}" data-c="${k}">${c.g} ${c.n}</button>`).join('')}</div>
+  <div class="focus" id="focus"><button class="chip ${!P.focus?'on':''}" data-c="">균형</button>${Object.entries(D.CATS).map(([k,c])=>`<button class="chip ${P.focus===k?'on':''}" data-c="${k}">${c.n}</button>`).join('')}</div>
   <h4>기술 계보 <span class="s">보유 ${known.size} / ${D.TECH_LIST.length} · 금테 = 지금 연구할 수 있음 · 같은 해 역사 평균 ${ENG.expectedTech(G.y)}개</span></h4>
   <div class="treewrap"><div class="tree" style="width:${TW}px;height:${TH}px"><svg width="${TW}" height="${TH}">${lines}</svg>${eraH}${catH}${nodes}</div></div>
   <p class="sub">기술 비용은 실제 역사보다 앞선 기술일수록 크게 오르고, 이미 널리 퍼진 기술일수록 싸진다. 이웃이 아는 기술은 25% 싸다.</p>`;
@@ -568,7 +596,7 @@ function paneDip(P){
     return `<div class="nb" style="grid-template-columns:12px 1fr auto auto;cursor:pointer" data-army="${a.id}"><i style="background:${a.mor>0.6?'#79b48a':a.mor>0.3?'#d9a441':'#d5604e'}"></i><span>${esc(a.name)} <span class="muted">· ${esc(a.gen.n)}${a.gen.fig?' ★':''} · ${esc(PNAME[a.p])}</span></span><span class="r">${armyShort(a.n)} · 병참 ${pct(a.sup)}</span><span class="r" style="color:${bt?'var(--seal2)':'var(--muted)'}">${bt?'전투':sg?'포위':a.path.length?'이동':a.auto?'자동':'대기'}</span></div>`; }).join('')||'<p class="sub">군단이 없다. 동원율을 높이면 수도에서 병력이 모인다.</p>'}
   <label class="row sub" style="margin-top:8px;gap:8px"><input type="checkbox" id="autobt" ${G.autoBattle?'checked':''}> 전투 전술을 장수에게 맡긴다 (전투 이벤트 창을 띄우지 않음)</label>
   ${logs.length?`<h4>최근 전투</h4>`+logs.map(b=>{ const won=b.win===G.player; const me=b.ao===G.player; const e=G.C[me?b.do:b.ao];
-    return `<div class="res-row"><span style="color:${won?'var(--gold2)':'var(--seal2)'};font-family:var(--f-display);font-weight:700">${won?'勝':'敗'}</span><span>${fy(b.y)} ${esc(PNAME[b.p])} <span class="muted">vs ${esc(e.name)} · ${b.days}일</span></span><span class="num muted" style="margin-left:auto;font-size:11.5px">아군 −${armyShort(me?b.lossA:b.lossD)} / 적 −${armyShort(me?b.lossD:b.lossA)}</span></div>`; }).join(''):''}
+    return `<div class="res-row"><span class="badge" style="color:${won?'var(--gold2)':'var(--seal2)'}">${won?'승리':'패배'}</span><span>${fy(b.y)} ${esc(PNAME[b.p])} <span class="muted">vs ${esc(e.name)} · ${b.days}일</span></span><span class="num muted" style="margin-left:auto;font-size:11.5px">아군 −${armyShort(me?b.lossA:b.lossD)} / 적 −${armyShort(me?b.lossD:b.lossA)}</span></div>`; }).join(''):''}
   <h4>이웃 나라 <span class="s">전력은 우리 대비 배수</span></h4>
   ${ns.map(c=>{ const tr=P.truce[c.i]>G.day, at=!!ENG.findWar(G,G.player,c.i); return `<div class="nb"><i style="background:${c.col}"></i><span>${esc(c.name)}</span><span class="r">×${(c.str/Math.max(1,P.str)).toFixed(1)}</span><button data-war="${c.i}" ${tr||at||P.exile?'disabled':''}>${at?'교전 중':tr?'휴전':'선전포고'}</button></div>`; }).join('')||'<p class="sub">국경을 맞댄 나라가 없다.</p>'}
   <h4>세계의 강대국</h4>
@@ -584,12 +612,12 @@ function paneFig(P){
     if(s.st==='dead') return ['사망','','dead'];
     const act=G.y>=f.a[0]&&G.y<=f.a[1]; return [act?'활동 중':G.y<f.a[0]?'성장 중':'은퇴',`${G.y-f.b}세`,act?'act':'']; };
   return `<p class="sub" style="margin-top:0">역사 인물은 정해진 해에 태어나 활동기에 나라에 보너스를 준다. 그들의 업적은 사건으로 찾아온다. 역사가 크게 바뀌면 태어나지 않을 수도 있다.</p>
-  ${rows.map(r=>{ const [s1,s2,cls]=stOf(r); return `<div class="fig ${cls==='dead'?'dim':''}"><div class="seal">${esc(r.f.g)}</div><div class="n">${esc(r.f.n)} <small>${esc(r.f.role)} · ${fy(r.f.b)}–${fy(r.f.d)}</small> <span class="badge ${cls}">${s1}</span>${r.mine?'':` <span class="badge">${esc((G.C[G.tag[r.s&&r.s.svc]]||{}).name||'세계')}</span>`}</div>
+  ${rows.map(r=>{ const [s1,s2,cls]=stOf(r); return `<div class="fig ${cls==='dead'?'dim':''}"><div class="seal">${esc(ini(r.f.n))}</div><div class="n">${esc(r.f.n)} <small>${esc(r.f.role)} · ${fy(r.f.b)}–${fy(r.f.d)}</small> <span class="badge ${cls}">${s1}</span>${r.mine?'':` <span class="badge">${esc((G.C[G.tag[r.s&&r.s.svc]]||{}).name||'세계')}</span>`}</div>
     <div class="x">${esc(r.f.x)}<br><span class="sub">${s2?s2+' · ':''}활동기 ${fy(r.f.a[0])}–${fy(r.f.a[1])} · ${esc(fxStr(r.f.fx))||'—'}</span>${r.mine&&cls==='act'?`<div class="row" style="gap:4px;margin-top:6px">${['adm','mil','sci'].map(k=>{ const cur=(r.s.role||ENG.defRole(r.f))===k; return `<button class="chip ${cur?'on':''}" data-role="${k}" data-f="${r.f.id}">${{adm:'재상',mil:'장수',sci:'학자'}[k]}</button>`; }).join('')}</div>`:''}</div></div>`; }).join('')||'<p class="sub">이 나라와 이어진 역사 인물이 없다.</p>'}`;
 }
 function paneChron(){
   const L=G.chron.slice().reverse();
-  return `<ul class="chron">${L.map(c=>`<li><div class="g">${esc(c.g)}</div><div><div class="y">${fy(c.y)} ${c.m}월</div><div class="t">${esc(c.t)}</div>${c.x?`<div class="x">${esc(c.x)}</div>`:''}</div></li>`).join('')}</ul>`;
+  return `<ul class="chron">${L.map(c=>`<li><div class="g">${esc(kg(c.g))}</div><div><div class="y">${fy(c.y)} ${c.m}월</div><div class="t">${esc(c.t)}</div>${c.x?`<div class="x">${esc(c.x)}</div>`:''}</div></li>`).join('')}</ul>`;
 }
 function bindPane(P){
   const pane=$('#pane');
@@ -603,6 +631,7 @@ function bindPane(P){
   pane.querySelectorAll('[data-war]').forEach(b=>b.onclick=()=>confirmWar(+b.dataset.war));
   pane.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ ENG.act.setStance(G,+b.dataset.e,b.dataset.st); renderPane(true); });
   pane.querySelectorAll('[data-army]').forEach(b=>b.onclick=()=>{ const id=+b.dataset.army; const a=G.armies.find(x=>x.id===id); if(a){ mv.focusOn(PCX[a.p],PCY[a.p],Math.max(mv.vs,6)); } selectArmy(id); });
+  const si=pane.querySelector('#sanInv'); if(si) si.onclick=()=>{ if(ENG.act.investSanitation(G)) toast('위생 사업을 벌였다.'); else toast('국고가 부족하다.'); renderPane(true); updateTop(); };
   const ac=pane.querySelector('#anticorr'); if(ac) ac.onclick=()=>{ if(ENG.act.antiCorruption(G)) toast('부패 척결에 나섰다.'); else toast('국고가 부족하다.'); renderPane(true); updateTop(); };
   pane.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{ ENG.act.setFigRole(G,b.dataset.f,b.dataset.role); toast('직책을 바꿨다.'); renderPane(true); });
   const ab=pane.querySelector('#autobt'); if(ab) ab.onchange=()=>{ ENG.act.setAutoBattle(G,ab.checked); };
@@ -646,7 +675,7 @@ function drawCharts(P){
 // ── 모달 ──
 function showModal(o){
   modalOpen=true; const m=$('#modal');
-  m.innerHTML=`<div class="ovl"><div class="evt" role="dialog" aria-modal="true" aria-labelledby="evt-t"><div class="hd"><div class="seal">${esc(o.glyph||'史')}</div><div><div class="when">${esc(o.when||'')}</div><h2 id="evt-t">${esc(o.title)}</h2>${o.who?`<div class="who">${esc(o.who)}</div>`:''}</div></div>
+  m.innerHTML=`<div class="ovl"><div class="evt" role="dialog" aria-modal="true" aria-labelledby="evt-t"><div class="hd"><div class="seal">${esc(o.glyphRaw?o.glyph:kg(o.glyph||'史'))}</div><div><div class="when">${esc(o.when||'')}</div><h2 id="evt-t">${esc(o.title)}</h2>${o.who?`<div class="who">${esc(o.who)}</div>`:''}</div></div>
    <div class="body">${o.body}</div><div class="opts">${o.opts.map((x,i)=>`<button class="opt" data-i="${i}"><div class="l">${esc(String(x.t).replace(/\s*\(역사\)/,''))}${x.h?'<span class="h">역사</span>':''}</div>${x.tip?`<div class="tp">${esc(x.tip)}</div>`:''}${x.dv?`<div class="dv">역사 개변도 +${x.dv}</div>`:''}</button>`).join('')}</div></div></div>`;
   m.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ const x=o.opts[+b.dataset.i]; m.innerHTML=''; modalOpen=false; try{ x.go&&x.go(); }catch(e){ console.error(e); } renderAll(true); });
   const first=m.querySelector('.opt'); if(first) first.focus({preventScroll:true});
@@ -658,7 +687,7 @@ function showNext(){
       opts:[{t:'강화를 받아들인다',tip:'전쟁 종료, 5년 휴전',go:()=>ENG.makePeace(G,G.player,q.from)},{t:'거절하고 싸운다',tip:'전쟁 계속',go:()=>{}}]}); return; }
   if(q.kind==='figure'){ const f=D.FIGS.find(x=>x.id===q.id); if(!f) return; const R=ENG.ROLE_FX; const dr=ENG.defRole(f);
     const nm={adm:'재상으로 삼는다',mil:'장수로 삼는다',sci:'학자로 삼는다'}, ds={adm:'나라 살림과 감찰을 맡긴다',mil:'가장 큰 군단의 지휘를 맡긴다 (장수 역량 6)',sci:'학문과 기술 개발을 맡긴다'};
-    showModal({glyph:f.g,when:fdate(G),title:`${f.n}, 역사의 무대에 서다`,who:`${f.role} · ${fy(f.b)}–${fy(f.d)}`,body:`${esc(f.x)}<br><br>고유 효과: ${esc(fxStr(f.fx))||'없음'}. 어떤 자리를 맡길 것인가? 직책에 따라 추가 효과가 붙는다. 인물 패널에서 언제든 바꿀 수 있다.`,
+    showModal({glyph:ini(f.n),glyphRaw:true,when:fdate(G),title:`${f.n}, 역사의 무대에 서다`,who:`${f.role} · ${fy(f.b)}–${fy(f.d)}`,body:`${esc(f.x)}<br><br>고유 효과: ${esc(fxStr(f.fx))||'없음'}. 어떤 자리를 맡길 것인가? 직책에 따라 추가 효과가 붙는다. 인물 패널에서 언제든 바꿀 수 있다.`,
       opts:['adm','mil','sci'].map(r=>({t:nm[r],tip:`${ds[r]} — ${fxStr(R[r])}${r===dr?' · 이 인물에게 어울리는 자리':''}`,h:r===dr,go:()=>ENG.act.setFigRole(G,f.id,r)}))}); return; }
   if(q.kind==='stance'){ const w=q.war; if(!G.wars.includes(w)) return; const mine=w.a===G.player; const e=G.C[mine?w.b:w.a];
     showModal({glyph:'戰',when:fdate(G),title:`${e.name}과(와)의 전쟁`,who:`${mine?'우리가 선전포고했다':'적이 선전포고했다'} · 적 병력 ${fmoney(ENG.armiesOf(G,e.i).reduce((s_,a)=>s_+a.n,0))}명 · 우리 ${fmoney(P.soldiers)}명`,
@@ -672,6 +701,11 @@ function showNext(){
     showModal({glyph:'戰',when:fdate(G),title:`${PNAME[b.p]} 전투`,who:`${side==='att'?'공격':'방어'} · ${T.n} (공격 ×${T.atk}, 방어 ×${T.def})${amph?' · 상륙 직후 ×0.35':''}`,
       body:`아군 ${Math.round(side==='att'?b.n0A:b.n0D).toLocaleString()}명 대 ${esc(e.name)} ${Math.round(side==='att'?b.n0D:b.n0A).toLocaleString()}명. 지휘관 ${esc(gen?gen.gen.n:'—')} (역량 ${gen?gen.gen.sk:'-'}/6). 어떻게 싸울 것인가?`,
       opts:pick.map(x=>({t:x.n,tip:`${x.d} ${x.fx==='gen'?'':x.gamble?`성공 확률 ${Math.round(x.gamble*100)}%`:`전투력 ×${x.fx}`}${x.loss&&x.loss!==1?` · 아군 손실 ×${x.loss}`:''}`,go:()=>{ const r=ENG.battleTactic(G,b.id,x.id); if(r) toast(`${x.n}: ${r}`); }}))}); return; }
+  if(q.kind==='epi'){ const e=(G.epi||[]).find(x=>x.id===q.id); if(!e) return; const x=D.DISEASES[e.d]; const f=ENG.epiFx(G,P,x);
+    const acts=D.EPI_ACTIONS.filter(a=>!a.need||P.techs.has(a.need));
+    showModal({glyph:'역병',glyphRaw:true,when:fdate(G),title:`${ga(x.n)} 우리 땅에 들어왔다`,who:`${P.name} · 위생 ${(P.san||0).toFixed(1)}/5`,
+      body:`${esc(x.d)}<br><br>이미 ${Object.keys(e.inf).length+Object.keys(e.done).length}개 지방을 휩쓸어 약 <b>${esc(fpop(e.deaths))}</b>이(가) 죽었다. 우리 위생 수준에서는 감염 ×${f.inf.toFixed(2)}, 치명률 ×${f.cfr.toFixed(2)}. 어떻게 막을 것인가?`,
+      opts:acts.map(a=>({t:a.n,tip:`${a.d}${a.cost?` · 국고 −${fmoney(P.income*a.cost)}`:''}${a.prod?` · 생산 ${Math.round(a.prod*100)}%`:''}`,h:a.id==='quarantine'&&G.y<1900||a.id==='testing',go:()=>ENG.act.epiAction(G,a.id,e.id)}))}); return; }
   if(q.kind==='relief'){
     showModal({glyph:q.type==='화산'?'火':'震',when:fdate(G),title:q.name,who:`${P.name} · ${q.type==='화산'?'VEI '+q.M:'규모 '+q.M.toFixed(1)}`,
       body:`${q.type==='화산'?'화산재와 화쇄류가 마을을 덮쳤다.':'땅이 갈라지고 집과 성벽이 무너졌다.'} 우리 백성 약 <b>${esc(fpop(q.deaths))}</b>이(가) 목숨을 잃었다. 살아남은 사람들이 조정을 바라보고 있다.`,
@@ -717,7 +751,7 @@ function showFinal(){
     <div><div class="v">${Object.keys(P.resCnt||{}).length}종</div><div class="k">보유 지하자원</div></div></div>
    <div class="chart" id="chF"></div>
    <h4 class="serif" style="margin:18px 0 6px">연대기에서</h4>
-   <ul class="chron">${G.chron.filter(c=>c.g!=='統').slice(-8).reverse().map(c=>`<li><div class="g">${esc(c.g)}</div><div><div class="y">${fy(c.y)}</div><div class="t">${esc(c.t)}</div></div></li>`).join('')}</ul>
+   <ul class="chron">${G.chron.filter(c=>c.g!=='統').slice(-8).reverse().map(c=>`<li><div class="g">${esc(kg(c.g))}</div><div><div class="y">${fy(c.y)}</div><div class="t">${esc(c.t)}</div></div></li>`).join('')}</ul>
    <div class="row" style="margin-top:16px;flex-wrap:wrap">${G.y<2100&&P.alive?'<button class="btn" id="cont">계속 진행</button>':''}<button class="btn gold" id="newg" style="flex:1">새 역사 시작</button></div></div></div>`;
   const S=G.hist; lineChart(document.getElementById('chF'),[{name:'당신의 세계 인구',color:'#d6a94f',pts:S.map(h=>[h.y,h.wp])},{name:'실제 역사',color:'#8a949b',dash:true,pts:S.map(h=>[h.y,h.wr])}],popFmt);
   const c=$('#cont'); if(c) c.onclick=()=>{ G.gameOver=null; G.over=false; $('#modal').innerHTML=''; modalOpen=false; };
@@ -760,7 +794,7 @@ function frame(t){
   }
   if(!G && smap && gPreview && smap.dirty){ smap.draw(gPreview); smap.dirty=false; }
   if(G && mv){
-    const needBuild = mv.ver!==G.ownVer || mv.builtMode!==mode || (mode!=='pol'&&G.day-mv.builtDay>60);
+    const needBuild = mv.ver!==G.ownVer || mv.builtMode!==mode || (mode!=='pol'&&G.day-mv.builtDay>(mode==='hea'?20:60));
     if(needBuild && (t-(mv._bt||0)>220 || mv.ver===-1)){ mv.build(G); mv._bt=t; mv.dirty=true; }
     if(mv.dirty || speed>0 || ff){ mv.draw(G); mv.dirty=false; }
     if(t-uiT>180){ uiT=t; updateTop(); if(++paneTick%4===0||speed===0&&paneTick%2===0) renderPane(); if((sel>=0||selArmy!=null)&&paneTick%3===0) renderCard(); }

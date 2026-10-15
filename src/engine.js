@@ -214,7 +214,7 @@ ENG.ROLE_FX=ROLE_FX;
 function defRole(f){ const x=f.fx; if((x.mil||0)+(x.def||0)>=0.15) return 'mil'; if((x.res||0)+(x.lit||0)*3>=0.08) return 'sci'; return 'adm'; }
 ENG.defRole=defRole;
 // ── 효과 합산 ──
-const FXKEYS=['tax','prod','mil','def','res','lit','life','stab','colon','naval','demo','manp','tfr','growth','corr'];
+const FXKEYS=['tax','prod','mil','def','res','lit','life','stab','colon','naval','demo','manp','tfr','growth','corr','san'];
 function techFx(c){ const s={}; FXKEYS.forEach(k=>s[k]=0); let gdp=650; for(const id of c.techs){ const t=TECHS[id]; for(const k in t.fx) s[k]+=t.fx[k]; gdp*=1+D.ERA_GDP_G[t.era]; } s.gdpBase=gdp; return s; }
 function mods(G,c){
   if(c.techDirty||!c.fx){ c.fx=techFx(c); c.techDirty=false; c._tf=techFactor(G,c); }
@@ -232,6 +232,8 @@ ENG.mods = mods;
 
 function corrCost(c){ return Math.max(c.income,c.gdp*0.01)*0.12*(1+c.prov/12); }
 ENG.corrCost=corrCost;
+function sanCost(c){ return Math.max(c.income,c.gdp*0.01)*(0.3+0.25*(c.sanInv||0))*(1+c.prov/30); }
+ENG.sanCost=sanCost;
 function recalc(G,c){
   let pop=0,n=0,area=0,coast=0; const rc={};
   let rw=0,pw=0,pn=0; for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; for(const r of PRES[p]) rc[r]=(rc[r]||0)+1; if(G.road) rw+=G.pop[p]*G.road[p]; if(G.port&&G.port[p]){ pw+=G.port[p]*PSUIT[p]; pn++; } }
@@ -252,6 +254,7 @@ function recalc(G,c){
   // 부패
   if(c.corr==null) c.corr=(D.GOV_CORR[c.gov]||15);
   const cf=clamp(c.corr,0,90)/100;
+  c.san=clamp(s.san+(c.sanInv||0),0,5);
   c.lit=clamp(s.lit,0,0.99);
   const effn=clamp(((c.eff==null?1:c.eff)-0.2)/0.8,0,1);
   const demo=clamp(s.demo*1.25,0,1)*clamp(0.3+0.7*effn,0,1); c.dev=demo;
@@ -262,7 +265,8 @@ function recalc(G,c){
   c.gdppc*=1-0.25*cf;
   c.gdp = pop*c.gdppc + (c.resIncome+c.portIncome)*(0.85+0.05*c.stab)*(1-0.3*cf);
   c.income = c.exile?0: c.gdp*0.07*Math.max(0.05,1+s.tax)*(1-0.6*cf);
-  c.expense = c.exile?0: c.income*0.42 + c.soldiers*c.gdppc*(['tribe','chief'].includes(c.gov)?0.7:2) + c.policies.length*c.gdp*0.0025 + (c.gold<0?-c.gold*0.08:0);
+  c.armyMul_=1+cf+4*cf*cf; c.armyCost=c.soldiers*c.gdppc*(['tribe','chief'].includes(c.gov)?0.7:2)*c.armyMul_;
+  c.expense = c.exile?0: c.income*0.42 + c.armyCost + c.policies.length*c.gdp*0.0025 + (c.sanInv>0?c.sanInv*c.gdp*0.0015:0) + (c.gold<0?-c.gold*0.08:0);
   const q = (1+s.mil)*(0.7+0.1*(c.stab+3)/2)*(1+ (c.m.mil>0?0:0));
   c.qual=q; c.str = c.soldiers*q*(1+0.15*c.techs.size/40);
   c.slots = D.GOVS[c.gov].slots;
@@ -432,6 +436,88 @@ function natureMonth(G){
   // 화산
   D.VOLCANOES.forEach((v,i)=>{ if(rng(G)<v[4]/12){ const r=rng(G); let vei=r<.7?4:r<.94?5:r<.99?6:r<.999?7:8; vei=Math.min(vei,v[3]); erupt(G,i,vei); } });
 }
+// ── 전염병 ──
+// G.epi: [{id,d,n,R,attack,cfr,vb(처녀지 상자),inf{p:개월},done{p:1},deaths,byC{ci:사망},y0,hitP}]
+const EPI_MAX=5;
+function diseaseOK(G,d){ const x=D.DISEASES[d]; return x&&!(G.erad&&G.erad[d]); }
+function startEpi(G,d,p0,o){
+  if(p0<0||!diseaseOK(G,d)) return null; o=o||{}; const x=D.DISEASES[d];
+  G.epi=G.epi||[];
+  const same=G.epi.find(e=>e.d===d); if(same){ if(!same.inf[p0]&&!same.done[p0]) same.inf[p0]=0; return same; }
+  if(G.epi.length>=EPI_MAX) G.epi.shift();
+  const e={id:(G.epiN=(G.epiN||0)+1),d,n:x.n,R:o.R||x.R,attack:(o.attack||1)*x.attack,cfr:o.cfr||x.cfr,vb:o.virginBox||null,inf:{},done:{},deaths:0,byC:{},y0:G.y,big:!!o.big};
+  e.inf[p0]=0; G.epi.push(e);
+  const c=G.owner[p0]>=0?G.C[G.owner[p0]]:null;
+  if(e.big||(c&&c.pop>3e6)) news(G,`${PNAME[p0].replace(/\s.*$/,'')}에서 ${x.n} 유행 시작`,'疫');
+  return e;
+}
+function epiProv(G,tag){ const c=C(G,tag); if(!c||!c.alive) return -1; if(c.cap>=0&&G.owner[c.cap]===c.i&&rng(G)<0.6) return c.cap; let best=-1,bp=-1; for(let p=0;p<N;p++) if(G.owner[p]===c.i){ const v=G.pop[p]*(0.5+rng(G)); if(v>bp){ bp=v; best=p; } } return best; }
+function pickDisease(G,c){ const ks=Object.keys(D.DISEASES).filter(k=>{ const x=D.DISEASES[k]; return k!=='covid'&&G.y>=x.from&&G.y<=x.to&&diseaseOK(G,k); }); if(!ks.length) return null;
+  const w=ks.map(k=>({smallpox:3,plague:0.3,typhoid:3,cholera:2.5,measles:3,typhus:c&&atWarAny(G,c.i)?5:1.5,flu:2.5}[k]||1)); let t=w.reduce((a,b)=>a+b,0)*rng(G); for(let i=0;i<ks.length;i++){ t-=w[i]; if(t<=0) return ks[i]; } return ks[0]; }
+function atWarAny(G,ci){ return G.wars.some(w=>w.a===ci||w.b===ci); }
+function epiM(G,c,k){ const m=c&&c.epiM; return m&&m.until>G.day&&m[k]!=null?m[k]:1; }
+// 위생·기술에 따른 배수
+function epiFx(G,c,x){
+  if(!c) return {inf:1,cfr:1,sp:1};
+  const s=c.san||0, kn=id=>id&&c.techs.has(id);
+  let inf=Math.max(0.12,1-(x.water?0.16:x.air?0.07:0.11)*s), cfr=Math.max(0.3,1-0.08*s), sp=Math.max(0.25,1-(x.water?0.12:x.air?0.05:0.09)*s);
+  if(kn(x.vac)){ inf*=x.vac==='genome'?0.35:0.12; sp*=0.5; }
+  if(kn(x.cure)) cfr*=0.2;
+  if(kn('medicine')) cfr*=0.9;
+  return {inf,cfr,sp};
+}
+function epiMonth(G){
+  if(!G.epi) G.epi=[];
+  // 풍토병의 새 유행 (평균 수 년에 한 번, 인구가 많고 붐빌수록 잦다)
+  const wp=interpLog(D.STATS.worldPop,G.y); const rate=clamp(Math.log10(Math.max(1e6,wp)/1e6)/3.2,0.05,1)*0.04;
+  if(G.epi.length<3&&rng(G)<rate){ const cs=G.C.filter(c=>c.alive&&c.pop>0); let t=cs.reduce((a,c)=>a+Math.sqrt(c.pop),0)*rng(G); let pick=cs[0]; for(const c of cs){ t-=Math.sqrt(c.pop); if(t<=0){ pick=c; break; } }
+    if(pick){ const d=pickDisease(G,pick); if(d) startEpi(G,d,epiProv(G,pick.tag),{attack:0.4+0.5*rng(G),R:D.DISEASES[d].R*(0.55+0.35*rng(G))}); } }
+  const P=G.C[G.player]; const died=new Map();
+  for(const e of G.epi){
+    const x=D.DISEASES[e.d]; const mo=x.months; const add=[];
+    for(const k in e.inf){ const p=+k; const t=e.inf[k]; const o=G.owner[p]; const c=o>=0?G.C[o]:null; const f=epiFx(G,c,x);
+      const vg=e.vb&&inBox(p,e.vb)?(x.virgin||1.5):1;
+      const w=Math.sin(Math.PI*(t+0.5)/mo)*Math.PI/(2*mo);
+      const ia=Math.min(0.9,e.attack*vg*f.inf*epiM(G,c,'inf')), cf=Math.min(0.9,e.cfr*Math.sqrt(vg)*f.cfr*epiM(G,c,'dm'));
+      const lost=G.pop[p]*ia*w*cf; G.pop[p]=Math.max(10,G.pop[p]-lost); e.deaths+=lost; if(o>=0){ e.byC[o]=(e.byC[o]||0)+lost; died.set(o,(died.get(o)||0)+lost); }
+      // 전파
+      if(t>=1&&t<mo-1){
+        const war=x.war&&c&&atWarAny(G,c.i)?1.6:1;
+        const base=0.11*e.R*f.sp*epiM(G,c,'sp')*war*(t<mo/2?1.2:0.6);
+        const rl=G.road?G.road[p]:0;
+        const tryQ=(q,k_)=>{ if(e.inf[q]!=null||e.done[q]) return; const oq=G.owner[q]; const cq=oq>=0?G.C[oq]:null; let pr=k_*epiFx(G,cq,x).sp; if(cq&&cq!==c) pr*=epiM(G,cq,'in'); if(G.pop[q]<500) pr*=0.3; if(rng(G)<pr) add.push(q); };
+        for(const q of ADJ[p]) tryQ(q,base*(1+0.25*rl));
+        const pl=G.port?G.port[p]:0; if(pl) for(const q of SEA[p]) tryQ(q,base*0.5*(0.5+0.3*pl));
+        // 먼 바닷길 · 하늘길
+        const fl=c&&c.techs.has('flight'), st=c&&c.techs.has('steam'); const jump=(fl?0.3:pl>=2&&st?0.12*pl:pl>=3?0.04*pl:0)*e.R/2.2*f.sp;
+        if(jump>0&&rng(G)<jump){ for(let k2=0;k2<6;k2++){ const q=Math.floor(rng(G)*N); const oq=G.owner[q]; if(oq<0) continue; const cq=G.C[oq]; if((fl&&cq.techs.has('flight'))||(G.port&&G.port[q]>=2)){ tryQ(q,1); break; } } }
+      }
+      if(t+1>=mo){ delete e.inf[k]; e.done[k]=1; } else e.inf[k]=t+1;
+    }
+    for(const q of add) if(e.inf[q]==null&&!e.done[q]) e.inf[q]=0;
+    // 플레이어에게 닿음
+    if(!e.hitP&&P.alive&&(e.big||Object.keys(e.inf).length+Object.keys(e.done).length>=5||e.deaths>5e4)&&Object.keys(e.inf).some(k=>G.owner[+k]===G.player)){ e.hitP=true; if(!(P._epiQ>G.day-365*3)||e.big){ P._epiQ=G.day; G.queue.push({kind:'epi',id:e.id,d:e.d}); } else news(G,`${e.n} 유행이 우리 땅에 번졌다`,'疫'); }
+  }
+  // 나라별 피해: 안정도·생산
+  for(const [o,l] of died){ const c=G.C[o]; if(!c.alive||c.pop<=0) continue; const r=l/c.pop; c.epiDeaths=(c.epiDeaths||0)+l; if(r>0.0008){ c.stab=clamp(c.stab-Math.min(0.4,r*25),-3,3); } if(r>0.003) c.tmods.push({k:'prod',v:-Math.min(0.08,r*4),until:G.day+120,label:'역병'}); }
+  // 끝난 유행
+  const ended=G.epi.filter(e=>!Object.keys(e.inf).length); G.epi=G.epi.filter(e=>Object.keys(e.inf).length);
+  for(const e of ended){ const tot=e.deaths; const mine=e.byC[G.player]||0; const p0=+Object.keys(e.done)[0];
+    logDisaster(G,{t:'역병',name:`${e.n} 유행 (${fmtYear(e.y0)}~)`,M:0,deaths:tot,p:p0});
+    if(tot>2e4||mine>0) news(G,`${e.n} 유행이 끝났다 — 사망 약 ${fmtPop(tot)}${mine>0?`, 우리 백성 ${fmtPop(mine)}`:''}`,'疫');
+    if(mine>P.pop*0.003) chron(G,`${e.n}이 지나가다`,`${fmtYear(e.y0)}부터 번진 ${e.n}으로 우리 백성 약 ${fmtPop(mine)}이(가) 목숨을 잃었다. 세계 전체로는 약 ${fmtPop(tot)}.`,'疫'); }
+}
+function epiInfo(G,p){ const r=[]; for(const e of (G.epi||[])) if(e.inf[p]!=null) r.push({n:e.n,t:e.inf[p],mo:D.DISEASES[e.d].months}); return r; }
+ENG.epiInfo=epiInfo; ENG.epiFx=epiFx;
+function epiAction(G,id,eid){ const P=G.C[G.player]; const a=D.EPI_ACTIONS.find(x=>x.id===id); if(!a) return;
+  P.gold-=P.income*a.cost; if(a.prod) P.tmods.push({k:'prod',v:a.prod,until:G.day+365,label:a.n}); if(a.stab) P.stab=clamp(P.stab+a.stab,-3,3);
+  const m=P.epiM&&P.epiM.until>G.day?P.epiM:{sp:1,dm:1,in:1,inf:1}; m.until=G.day+365;
+  if(id==='quarantine'){ m.sp*=0.35; m.in*=0.6; } if(id==='medics') m.dm*=0.6; if(id==='closed') m.in*=0.15; if(id==='testing'){ m.sp*=0.3; m.in*=0.5; m.dm*=0.8; m.inf*=0.7; }
+  P.epiM=m; const e=(G.epi||[]).find(x=>x.id===eid); chron(G,`${e?e.n:'역병'} 대책: ${a.n}`,a.d,'醫'); }
+ENG.epiAction=epiAction;
+// AI 대책
+function epiAI(G){ for(const e of (G.epi||[])){ const hit=new Set(Object.keys(e.inf).map(k=>G.owner[+k]).filter(o=>o>=0&&o!==G.player)); for(const o of hit){ const c=G.C[o]; if(c.epiM&&c.epiM.until>G.day) continue; if(rng(G)<0.15+0.06*(c.san||0)){ c.epiM={sp:c.techs.has('computer')?0.3:0.45,dm:0.75,in:0.6,inf:1,until:G.day+365}; } } } }
+
 // ── 엔진 API (사건 스크립트용) ──
 function api(G){
   const E = {
@@ -502,7 +588,12 @@ function api(G){
     krPre:()=>{ for(const t of ['GOJOSEON','KR_NEO']) if(has(G,t)) return t; return null; },
     quake:(lo,la,M,name,share)=>quake(G,lo,la,M,name,share),
     erupt:(v,vei)=>erupt(G,v,vei),
-    cool:(dT,yrs,label)=>addCool(G,dT,yrs,label)
+    cool:(dT,yrs,label)=>addCool(G,dT,yrs,label),
+    outbreak:(d,lo,la,o)=>startEpi(G,d,nearestProv(lo,la,600),Object.assign({big:1},o||{})),
+    outbreakAt:(d,t,o)=>{ const c=C(G,t); if(!c||!c.alive) return; d=d||pickDisease(G,c); if(d) startEpi(G,d,epiProv(G,t),o); },
+    san:(t,v)=>{ const c=C(G,t); if(c) c.sanInv=clamp((c.sanInv||0)+v,-1.5,3); },
+    epiShield:(t,yrs,k)=>{ const c=C(G,t); if(!c) return; const m=c.epiM&&c.epiM.until>G.day?c.epiM:{sp:1,dm:1,in:1,inf:1}; m.in*=k; m.until=Math.max(m.until||0,G.day+Math.round(yrs*365)); c.epiM=m; },
+    eradicate:d=>{ (G.erad=G.erad||{})[d]=1; G.epi=(G.epi||[]).filter(e=>e.d!==d); }
   };
   return E;
 }
@@ -970,7 +1061,7 @@ function figMonth(G){
         const dy = G.div<40 ? f.d : f.d + Math.round((rng(G)-0.5)*20);
         G.figs[f.id]={st:'alive',dy,svc:owner||null};
         const P=G.C[G.player];
-        if(owner===P.tag) chron(G,`${f.n} 탄생`,`${f.n}이(가) 태어났다. 훗날 ${f.role}(으)로 이름을 남길 아이다. ${f.x}`,f.g);
+        if(owner===P.tag) chron(G,`${f.n} 탄생`,`${f.n}이(가) 태어났다. 훗날 ${f.role}(으)로 이름을 남길 아이다. ${f.x}`,'人');
         else if(!f.tags.length || (G.C[G.tag[owner]]&&G.C[G.tag[owner]].pop>3e6)) news(G,`${f.n} 탄생 (${owner?G.C[G.tag[owner]].name:'세계'})`,'人');
       }
       continue;
@@ -978,8 +1069,8 @@ function figMonth(G){
     if(s.st==='alive'){
       // 소속 갱신 (국가가 개칭·멸망한 경우)
       if(!s.svc||!has(G,s.svc)){ s.svc=f.tags.find(t=>has(G,t))||null; }
-      if(G.y>=s.dy){ s.st='dead'; const P=G.C[G.player]; if(s.svc===P.tag) chron(G,`${f.n} 사망`,`${f.n}이(가) 세상을 떠났다.`,f.g); }
-      else if(G.y===f.a[0] && G.m===1 && s.svc===G.C[G.player].tag){ chron(G,`${f.n}, 역사의 무대에 서다`,f.x,f.g); if(!s.roleAsked){ s.roleAsked=1; G.queue.push({kind:'figure',id:f.id}); } }
+      if(G.y>=s.dy){ s.st='dead'; const P=G.C[G.player]; if(s.svc===P.tag) chron(G,`${f.n} 사망`,`${f.n}이(가) 세상을 떠났다.`,'人'); }
+      else if(G.y===f.a[0] && G.m===1 && s.svc===G.C[G.player].tag){ chron(G,`${f.n}, 역사의 무대에 서다`,f.x,'人'); if(!s.roleAsked){ s.roleAsked=1; G.queue.push({kind:'figure',id:f.id}); } }
     }
   }
 }
@@ -1074,6 +1165,7 @@ function monthly(G,E){
   const yr=G.y;
   computeTemp(G);
   natureMonth(G);
+  epiMonth(G); epiAI(G);
   // 이웃의 지식 (기술 확산)
   for(const c of G.C){ if(!c.alive) continue; recalc(G,c); }
   // 인구
@@ -1082,6 +1174,7 @@ function monthly(G,E){
     if(o>=0){ const c=G.C[o]; const surv=clamp(0.64+(c.leS-28)*0.011,0.3,0.995); const gen=26+30*c.dev*c.dev; r=Math.log(c.tfrS*surv/2.05)/gen + (c.m.growth||0); }
     else r=0.008;
     let P=G.pop[p];
+    { const T=K/headroom(G.y)*0.85; if(o>=0&&P<T) r+=0.012*(1-P/T); } // 역병·전쟁 뒤의 회복 (빈 땅으로의 이주와 높은 출산)
     if(r>0){ if(P<K) P+=P*r*(1-(P/K)*(P/K))/12; else P-=(P-K)*0.04/12; }
     else { P+=P*r/12; if(P>K) P-=(P-K)*0.04/12; }
     G.pop[p]=Math.max(10,P);
@@ -1194,6 +1287,8 @@ ENG.act = {
   develop(G,p){ const P=G.C[G.player]; if(G.owner[p]!==G.player) return false; const cost=P.income*0.1; if(P.gold<cost) return false; P.gold-=cost; G.pop[p]*=1.04; return true; },
   relief(G,level,lost){ const P=G.C[G.player]; if(level===2){ P.gold-=P.income*0.25; P.stab=clamp(P.stab+0.4,-3,3); P.tmods.push({k:'prod',v:0.03,until:G.day+365*2,label:'재건'}); }
     else if(level===1){ P.gold-=P.income*0.08; } else { P.stab=clamp(P.stab-0.6,-3,3); } },
+  investSanitation(G){ const P=G.C[G.player]; const cost=sanCost(P); if((P.sanInv||0)>=2||P.gold<cost) return false; P.gold-=cost; P.sanInv=(P.sanInv||0)+0.5; recalc(G,P); chron(G,'위생 사업',`우물과 도랑을 정비하고 의원을 늘렸다. 위생 수준 ${P.san.toFixed(1)}.`,'衛'); return true; },
+  epiAction(G,id,eid){ epiAction(G,id,eid); },
   switchTo(G,ci){ G.player=ci; const c=G.C[ci]; c.ruler=null; ensureRuler(G,c,true); c.mob=c.mob||0.012; G.gameOver=null; G.over=false; chron(G,`${c.name}으로 이어가다`,`새로운 나라의 역사를 이끈다.`,'史'); }
 };
 
@@ -1209,10 +1304,11 @@ ENG.save=function(G){
   o.owner=Array.from(G.owner); o.pop=Array.from(G.pop,v=>Math.round(v)); o.road=Array.from(G.road||[]); o.port=Array.from(G.port||[]);
   o.C=G.C.map(c=>{ const x=Object.assign({},c); x.techs=[...c.techs]; delete x.fx; delete x.m; delete x._nbKnow; return x; });
   o.queue=G.queue.filter(q=>q.kind==='peace');
+  delete o._E;
   return JSON.stringify(o);
 };
 ENG.load=function(s){
-  const o=JSON.parse(s); o.owner=Int16Array.from(o.owner); o.pop=Float64Array.from(o.pop); o.road=Uint8Array.from(o.road||[]); if(o.road.length!==N) o.road=new Uint8Array(N); o.port=Uint8Array.from(o.port||[]); if(o.port.length!==N) o.port=new Uint8Array(N); o.pend=o.pend||[]; o.armies=o.armies||[]; o.battles=o.battles||[]; o.sieges=o.sieges||{};
+  const o=JSON.parse(s); o.owner=Int16Array.from(o.owner); o.pop=Float64Array.from(o.pop); o.road=Uint8Array.from(o.road||[]); if(o.road.length!==N) o.road=new Uint8Array(N); o.port=Uint8Array.from(o.port||[]); if(o.port.length!==N) o.port=new Uint8Array(N); o.pend=o.pend||[]; o.epi=o.epi||[]; o.armies=o.armies||[]; o.battles=o.battles||[]; o.sieges=o.sieges||{};
   o.C.forEach(c=>{ c.techs=new Set(c.techs); c.techDirty=true; delete c._sup; });
   o.queue=o.queue||[];
   for(const c of o.C) if(c.alive) recalc(o,c);

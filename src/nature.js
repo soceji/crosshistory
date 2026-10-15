@@ -11,17 +11,17 @@ const H = (t, tip, fx) => O(t, tip, fx, true);
 // units: 매장지 1곳의 연간 가치 (그해 세계 1인당 생산 × 인구 몇 명분인지, 백만 명 단위를 세계 인구 비율로 환산)
 // on(c): 이 나라에서 가치가 있는가 / 반환값은 배수
 D.RES = {
-  obsidian:{n:'흑요석', g:'曜', col:'#6f7d8c', units:6,  on:k=>k('bronze')?0:1, d:'날카로운 화산 유리. 청동기 이전 최고의 도구 재료이자 교역품.'},
-  salt:    {n:'소금',   g:'鹽', col:'#c9c2b0', units:1,  on:k=>k('chem')?0.25:1, d:'생존과 저장의 필수품. 근대 화학 이전에는 국가 전매의 대상.'},
-  copper:  {n:'구리',   g:'銅', col:'#c27a4a', units:2,  on:k=>k('copper')?1:0, d:'인류가 처음 녹인 금속. 전기 시대에 다시 핵심 자원이 된다.'},
-  tin:     {n:'주석',   g:'錫', col:'#9aa6ad', units:2,  on:k=>!k('bronze')?0:k('steel')?0.3:1, d:'구리와 섞으면 청동이 된다. 매장지가 드물어 청동기 교역망을 만들었다.'},
-  iron:    {n:'철',     g:'鐵', col:'#8e5a4a', units:2.5,  on:k=>!k('iron')?0:k('steel')?1.3:1, d:'철기와 강철의 원료. 가야와 변한은 철을 화폐처럼 썼다.'},
-  gold:    {n:'금',     g:'金', col:'#d9b44a', units:1.5,  on:k=>k('bronze')?1:0, d:'화폐와 왕권의 상징.'},
-  silver:  {n:'은',     g:'銀', col:'#c9ced2', units:1.5,  on:k=>k('currency')?1:0, d:'국제 결제 수단. 조선의 연은분리법이 일본 은 생산을 바꿨다.'},
-  coal:    {n:'석탄',   g:'炭', col:'#8f8f86', units:4,  on:k=>!k('steam')?0:k('carbon')?0.15:k('renew')?0.5:1, d:'산업혁명의 연료.'},
-  oil:     {n:'석유',   g:'油', col:'#6f8fb0', units:8,  on:k=>!k('combust')?0:k('carbon')?0.25:k('ev')?0.6:1, d:'20세기의 피. 전쟁과 부의 지도를 다시 그렸다.'},
-  uranium: {n:'우라늄', g:'鈾', col:'#7fa65a', units:1,  on:k=>k('nucpower')||k('nuke')?1:0, d:'원자력 발전과 핵무기의 원료.'},
-  rare:    {n:'희토류·리튬', g:'稀', col:'#8a6fb0', units:1.5, on:k=>!k('semicon')?0:k('ev')?2:1, d:'반도체·배터리·전기 모터의 필수 원료.'}
+  obsidian:{n:'흑요석', g:'흑', col:'#6f7d8c', units:6,  on:k=>k('bronze')?0:1, d:'날카로운 화산 유리. 청동기 이전 최고의 도구 재료이자 교역품.'},
+  salt:    {n:'소금',   g:'염', col:'#c9c2b0', units:1,  on:k=>k('chem')?0.25:1, d:'생존과 저장의 필수품. 근대 화학 이전에는 국가 전매의 대상.'},
+  copper:  {n:'구리',   g:'구', col:'#c27a4a', units:2,  on:k=>k('copper')?1:0, d:'인류가 처음 녹인 금속. 전기 시대에 다시 핵심 자원이 된다.'},
+  tin:     {n:'주석',   g:'석', col:'#9aa6ad', units:2,  on:k=>!k('bronze')?0:k('steel')?0.3:1, d:'구리와 섞으면 청동이 된다. 매장지가 드물어 청동기 교역망을 만들었다.'},
+  iron:    {n:'철',     g:'철', col:'#8e5a4a', units:2.5,  on:k=>!k('iron')?0:k('steel')?1.3:1, d:'철기와 강철의 원료. 가야와 변한은 철을 화폐처럼 썼다.'},
+  gold:    {n:'금',     g:'금', col:'#d9b44a', units:1.5,  on:k=>k('bronze')?1:0, d:'화폐와 왕권의 상징.'},
+  silver:  {n:'은',     g:'은', col:'#c9ced2', units:1.5,  on:k=>k('currency')?1:0, d:'국제 결제 수단. 조선의 연은분리법이 일본 은 생산을 바꿨다.'},
+  coal:    {n:'석탄',   g:'탄', col:'#8f8f86', units:4,  on:k=>!k('steam')?0:k('carbon')?0.15:k('renew')?0.5:1, d:'산업혁명의 연료.'},
+  oil:     {n:'석유',   g:'유', col:'#6f8fb0', units:8,  on:k=>!k('combust')?0:k('carbon')?0.25:k('ev')?0.6:1, d:'20세기의 피. 전쟁과 부의 지도를 다시 그렸다.'},
+  uranium: {n:'우라늄', g:'우', col:'#7fa65a', units:1,  on:k=>k('nucpower')||k('nuke')?1:0, d:'원자력 발전과 핵무기의 원료.'},
+  rare:    {n:'희토류·리튬', g:'희', col:'#8a6fb0', units:1.5, on:k=>!k('semicon')?0:k('ev')?2:1, d:'반도체·배터리·전기 모터의 필수 원료.'}
 };
 // 기술 ↔ 자원: 이 자원을 가졌으면 연구가 20% 싸고, 이웃에게도 없으면 15% 비싸다
 D.TECH_RES = {copper:['copper'], bronze:['copper','tin'], iron:['iron'], currency:['gold','silver'], cokeiron:['coal','iron'], steam:['coal'], steel:['iron','coal'], combust:['oil'], nucpower:['uranium'], nuke:['uranium'], semicon:['rare'], ev:['rare'], renew:['rare']};
