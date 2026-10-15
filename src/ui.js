@@ -68,6 +68,7 @@ class MapView{
       if(mode==='pol'||mode==='start'){ c = o<0? TERR[PTER[p]] : ccol[o]; if(mode==='start'&&this.focusTag!=null&&o>=0&&o!==this.focusTag) c=mix(c,[30,38,44],0.55); }
       else if(mode==='pop'){ const dens=g.pop[p]/Math.max(200,PAREA[p]); const t=clamp((Math.log10(dens+0.01)+1)/3.6,0,1); c=mix([28,40,46],[240,207,134],Math.pow(t,0.9)); }
       else if(mode==='tech'){ if(o<0) c=[34,42,48]; else { const v=clamp((g.C[o].techs.size-exp)/12,-1,1); c= v<0? mix([120,124,126],[70,120,170],-v) : mix([120,124,126],[226,178,80],v); } }
+      else if(mode==='res'){ const base=o<0? TERR[PTER[p]] : mix(ccol[o],[30,38,44],0.55); const rk=clamp(MAP.PSEIS[p]*120,0,1); c=mix(base,[150,60,48],rk*0.75); }
       else if(mode==='dip'){ if(o<0) c=[34,42,48]; else if(o===P) c=GOLD; else { const w=ENG.findWar(g,P,o); if(w) c=SEAL; else if(g.C[P].truce[o]>g.day) c=[120,104,150]; else c=[80,92,100]; } }
       pcol[p]=c; pc[p]=pack(c[0],c[1],c[2]);
     }
@@ -141,6 +142,17 @@ class MapView{
     }
     if(!this.inter) return;
     const P=g.C[g.player];
+    // 자원·화산 표시
+    if(mode==='res' || s>=6){
+      const kn=id=>P.techs.has(id); const fs=Math.max(9,Math.min(13,s*2.2));
+      ctx.font=`700 ${fs}px 'Noto Serif KR',serif`;
+      for(let p=0;p<N;p++){ const rs=MAP.PRES[p]; if(!rs.length) continue; const [x,y]=this.toScreen(PCX[p],PCY[p]); if(x<-20||x>this.cw+20||y<-20||y>this.ch+20) continue;
+        const uniq=[...new Set(rs)]; uniq.forEach((r,i)=>{ const R=D.RES[r]; const on=R.on(kn)>0; const xx=x+(i-(uniq.length-1)/2)*(fs+5);
+          ctx.beginPath(); ctx.arc(xx,y,fs*0.72,0,7); ctx.fillStyle=on?R.col:'rgba(40,48,54,.85)'; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle=on?'rgba(8,11,14,.8)':R.col; ctx.stroke();
+          ctx.fillStyle=on?'#0d1318':R.col; ctx.fillText(R.g,xx,y+0.5); }); }
+      ctx.font=`700 ${Math.max(11,fs+2)}px sans-serif`;
+      D.VOLCANOES.forEach(v=>{ const [x,y]=this.toScreen((v[1]-MAP.lon0)/MAP.res,(MAP.lat0-v[2])/MAP.res); if(x<-20||x>this.cw+20||y<-20||y>this.ch+20) return; ctx.strokeStyle='rgba(8,11,14,.8)'; ctx.lineWidth=3; ctx.strokeText('▲',x,y); ctx.fillStyle='#e0664f'; ctx.fillText('▲',x,y); });
+    }
     // 수도
     if(P.cap>=0){ const [x,y]=this.toScreen(PCX[P.cap],PCY[P.cap]); ctx.fillStyle='#f0cf86'; ctx.strokeStyle='#1b1407'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,4.5,0,7); ctx.fill(); ctx.stroke(); }
     // 작전 표시
@@ -202,7 +214,7 @@ function startGame(g,intro){
 function buildChrome(){
   $('#speeds').innerHTML=`<button class="pause" data-s="0" aria-label="일시정지">❚❚</button>`+SPEEDS.map(s=>`<button data-s="${s}">${s}×</button>`).join('');
   $('#speeds').onclick=e=>{ const b=e.target.closest('button'); if(b) setSpeed(+b.dataset.s); };
-  $('#modes').innerHTML=[['pol','정치'],['pop','인구 밀도'],['tech','기술 수준'],['dip','외교']].map(([k,n])=>`<button data-m="${k}" class="${k===mode?'on':''}">${n}</button>`).join('');
+  $('#modes').innerHTML=[['pol','정치'],['pop','인구 밀도'],['tech','기술 수준'],['dip','외교'],['res','자원·재해']].map(([k,n])=>`<button data-m="${k}" class="${k===mode?'on':''}">${n}</button>`).join('');
   $('#modes').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; mode=b.dataset.m; $('#modes').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); mv.ver=-1; renderLegend(); };
   const TABS=[['state','국정'],['tech','기술'],['inst','제도'],['dip','외교·전쟁'],['fig','인물'],['chron','연대기']];
   $('#tabs').innerHTML=TABS.map(([k,n])=>`<button data-t="${k}" class="${k===tab?'on':''}">${n}</button>`).join('');
@@ -220,6 +232,7 @@ function renderLegend(){
   L.hidden=false;
   if(mode==='pop') L.innerHTML=`인구 밀도 (명/km²)<div class="ramp" style="background:linear-gradient(90deg,#1c282e,#f0cf86)"></div><div class="ends"><span>0.1</span><span>10</span><span>1000+</span></div>`;
   if(mode==='tech') L.innerHTML=`실제 역사의 같은 해 대비 기술 수<div class="ramp" style="background:linear-gradient(90deg,#4678aa,#787c7e,#e2b250)"></div><div class="ends"><span>−12</span><span>역사 수준</span><span>+12</span></div>`;
+  if(mode==='res') L.innerHTML=`<div style="margin-bottom:4px">지하자원 <span class="muted">(색이 채워진 것 = 지금 기술로 쓸 수 있음)</span></div><div style="display:grid;grid-template-columns:repeat(3,auto);gap:3px 10px">${Object.values(D.RES).map(r=>`<span><b style="color:${r.col};font-family:var(--f-display)">${r.g}</b> ${r.n}</span>`).join('')}</div><div style="margin-top:6px"><span style="color:#e0664f">▲</span> 화산 · <span style="display:inline-block;width:10px;height:10px;background:#96503c;vertical-align:middle"></span> 지진 위험이 높은 곳</div>`;
   if(mode==='dip') L.innerHTML=`<div style="display:grid;grid-template-columns:12px 1fr;gap:4px 8px;align-items:center"><i style="width:12px;height:12px;background:#d6a94f"></i>우리 나라<i style="width:12px;height:12px;background:#c4452f"></i>교전국<i style="width:12px;height:12px;background:#786896"></i>휴전 중<i style="width:12px;height:12px;background:#505c64"></i>기타 국가</div>`;
 }
 function setSpeed(s){ if(s>0) lastSpeed=s; speed=s; if(s===0) ff=false; updateTop(); }
@@ -234,10 +247,11 @@ function updateTop(){
   const cur=P.cur?D.TECHS[P.cur]:null; const cp=cur?clamp(P.prog/(P._cost||ENG.techCost(G,P,P.cur)),0,1):0;
   $('#stats').innerHTML=[
     ['인구',fpop(P.pop)],
-    ['국고',`${fmoney(P.gold)} <small class="${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmoney(net)}/월</small>`],
+    [['tribe','chief'].includes(P.gov)?'비축':'국고',`${fmoney(P.gold)} <small class="${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmoney(net)}/월</small>`],
     ['병력',`${fmoney(P.soldiers)}명`],
     ['안정도',`<span class="${st>=0.5?'pos':st<-0.5?'neg':''}">${st>=0?'+':''}${st.toFixed(1)}</span>`],
     ['연구',cur?`${esc(cur.n)} <small>${pct(cp)}</small>`:'<small>선택 없음</small>'],
+    ['기온',`${(G.temp||0)>=0?'+':''}${(G.temp||0).toFixed(1)}°C`],
     ['역사 개변도',`${G.div.toFixed(0)}%`]
   ].map(([k,v])=>`<div class="pill"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
   // 티커
@@ -247,6 +261,17 @@ function updateTop(){
 
 // ── 지방 카드 ──
 function selectProv(p){ sel=p; mv.setHighlight(p); mv.dirty=true; renderCard(); }
+function provNature(p,P){
+  const kn=id=>P.techs.has(id); let h='';
+  const rs=MAP.PRES[p];
+  if(rs.length){ h+=`<div class="sub" style="margin:-2px 0 4px;letter-spacing:.04em">지하자원</div>`+rs.map((r,i)=>{ const R=D.RES[r]; const on=R.on(kn)>0;
+    return `<div class="res-row"><span class="g${on?'':' off'}" style="background:${R.col};color:${on?'#0d1318':R.col}">${R.g}</span><span>${esc(R.n)} <span class="muted">· ${esc(MAP.PRESN[p][i])}</span></span><span class="muted" style="margin-left:auto;font-size:11.5px">${on?'활용 가능':'아직 가치 없음'}</span></div>`; }).join(''); }
+  const z=MAP.PSEISZ[p]; const vs=D.VOLCANOES.map((v,i)=>[v,MAP.hav(PLON[p],PLAT[p],v[1],v[2])]).filter(x=>x[1]<350).sort((a,b)=>a[1]-b[1]);
+  if(z>=0||vs.length){ h+=`<div class="sub" style="margin:8px 0 4px;letter-spacing:.04em">재해 위험</div>`;
+    if(z>=0){ const Z=D.SEISMIC[z]; h+=`<div class="res-row">지진대: ${esc(Z[0])} <span class="muted" style="margin-left:auto">권역 전체에서 대지진 약 ${Math.max(1,Math.round(1/Z[2]))}년에 한 번</span></div>`; }
+    if(vs.length){ const [v,d]=vs[0]; h+=`<div class="res-row"><span style="color:#e0664f">▲</span> ${esc(v[0])} ${Math.round(d)}km <span class="muted" style="margin-left:auto">최대 VEI ${v[3]}</span></div>`; } }
+  return h?`<div style="margin:0 0 10px">${h}</div>`:'';
+}
 function renderCard(){
   const el=$('#pcard'); if(sel<0||!G){ el.hidden=true; return; }
   const p=sel, o=G.owner[p], P=G.C[G.player], c=o>=0?G.C[o]:null;
@@ -269,6 +294,7 @@ function renderCard(){
   el.innerHTML=`<button class="x" id="pcx" aria-label="닫기">×</button><h3>${esc(PNAME[p])}</h3>
    <div class="own">${c?`<i style="background:${c.col}"></i>${esc(c.name)}`:'<i style="background:#4a4f45"></i>주인 없는 땅 (원주민 거주)'}</div>
    <dl><dt>인구</dt><dd>${fpop(G.pop[p])}</dd><dt>부양 한계</dt><dd>${fpop(K)}</dd><dt>면적</dt><dd>${Math.round(PAREA[p]).toLocaleString()} km²</dd><dt>지형</dt><dd style="font-family:var(--f-body)">${D.TERRAIN[PTER[p]].n}${MAP.PCOAST[p]?' · 해안':''}</dd><dt>좌표</dt><dd>${PLAT[p].toFixed(1)}°, ${PLON[p].toFixed(1)}°</dd></dl>
+   ${provNature(p,P)}
    <div class="acts">${acts}</div>`;
   $('#pcx').onclick=()=>selectProv(-1);
   const on=(id,fn)=>{ const b=document.getElementById(id); if(b) b.onclick=fn; };
@@ -309,6 +335,23 @@ function realRef(P){
   if(P.tag==='DPRK') return null;
   return {n:'실제 한반도 인구 (추정)',t:D.STATS.koreaPop};
 }
+function paneNature(P){
+  const kn=id=>P.techs.has(id); const rc=P.resCnt||{}; const keys=Object.keys(rc);
+  const rows=keys.sort((a,b)=>(P.resVal[b]||0)-(P.resVal[a]||0)).map(r=>{ const R=D.RES[r]; const v=P.resVal[r]||0; const on=v>0;
+    return `<div class="res-row"><span class="g${on?'':' off'}" style="background:${R.col};color:${on?'#0d1318':R.col}">${R.g}</span><span>${esc(R.n)} ×${rc[r]}</span><span class="${on?'num':'muted'}" style="margin-left:auto;font-size:12px">${on?'연 '+fmoney(v):'아직 쓸 수 없음'}</span></div>`; }).join('');
+  const T=G.temp||0, TR=ENG.realTemp(G.y), cools=(G.cools||[]).filter(c=>c.until>G.day);
+  const dis=(G.disasters||[]).slice().reverse().filter(d=>d.deaths>3000||G.owner[d.p]===G.player).slice(0,5);
+  return `<h4>지하자원 <span class="s">자원 수입은 GDP의 ${P.gdp>0?((P.resIncome||0)/P.gdp*100).toFixed(1):0}%</span></h4>
+  ${rows||'<p class="sub">영토 안에 알려진 큰 매장지가 없다. 이웃에게 있으면 교역으로 부족은 면한다.</p>'}
+  ${P.short&&P.short.length?`<p class="factline" style="border-color:var(--seal)">자원 부족: ${P.short.map(esc).join(', ')}. 우리 땅과 이웃 어디에도 없어 군사력과 생산이 떨어진다. 해당 자원이 있는 땅을 개척하거나 차지하라.</p>`:''}
+  <p class="sub">자원을 가진 나라는 관련 기술(청동기·철기·증기기관·내연기관·반도체 등)을 20% 싸게 연구한다.</p>
+  <h4>기후 <span class="s">1850–1900년 평균 대비 세계 기온</span></h4>
+  <table class="cmp"><tr><th></th><th>당신의 세계</th><th>실제 역사</th></tr><tr><td>기온 편차</td><td>${T>=0?'+':''}${T.toFixed(2)}°C</td><td class="r">${TR>=0?'+':''}${TR.toFixed(2)}°C</td></tr></table>
+  ${cools.length?`<p class="sub">화산 냉각 중: ${cools.map(c=>`${esc(c.label)} ${c.dT}°C`).join(', ')}</p>`:''}
+  <p class="sub">추우면 고위도의 부양력이, +1°C를 넘게 더우면 열대의 부양력이 줄어든다. 1850년 이후 기온은 세계 경제의 화석연료 의존도를 따라 실제 역사보다 빨라지거나 느려진다.</p>
+  <div class="chart" id="ch3"></div>
+  ${dis.length?`<h4>최근 재해</h4>`+dis.map(d=>`<div class="res-row"><span style="color:${d.t==='화산'?'#e0664f':'#c3bcac'};font-family:var(--f-display);font-weight:700">${d.t==='화산'?'火':'震'}</span><span>${fy(d.y)} ${esc(d.name)} <span class="muted">${d.t==='화산'?'VEI '+d.M:'규모 '+d.M.toFixed(1)}</span></span><span class="num muted" style="margin-left:auto;font-size:12px">${fpop(d.deaths)}</span></div>`).join(''):''}`;
+}
 function paneState(P){
   const R=P.ruler, age=R?G.y-R.born:0;
   const yrsIn=Math.max(0,G.y-G.startY);
@@ -336,6 +379,7 @@ function paneState(P){
   </table>
   <p class="factline">이 나라에서 태어난 아이 100명 중 <b>${Math.round(myU5*100)}명</b>은 다섯 살을 넘기지 못한다. 같은 해 실제 세계 평균은 ${Math.round(u5*100)}명이다.</p>
   ${real?`<p class="sub" style="margin:0 0 4px">「인구」 행의 오른쪽 칸은 ${real.n} 값이다.</p>`:''}
+  ${paneNature(P)}
   <h4>군대 <span class="s">인구 대비 상비 병력 비율</span></h4>
   <div class="slider"><div class="row"><span>동원율</span><b class="num" id="mobv">${(P.mob*100).toFixed(1)}%</b></div>
    <input type="range" id="mob" min="0.2" max="8" step="0.1" value="${(P.mob*100).toFixed(1)}" aria-label="동원율">
@@ -444,14 +488,15 @@ function bindPane(P){
 }
 
 // ── 차트 (SVG 선 그래프 + 십자선 툴팁) ──
-function lineChart(el, series, yfmt){
+function lineChart(el, series, yfmt, signed){
   const w=Math.max(260,el.clientWidth||360), h=150, ml=48, mr=8, mt=8, mb=22;
   const all=series.flatMap(s=>s.pts); if(all.length<2){ el.innerHTML='<p class="sub">기록이 쌓이면 그래프가 그려진다.</p>'; return; }
   const x0=Math.min(...all.map(p=>p[0])), x1=Math.max(...all.map(p=>p[0]));
-  const ymax=Math.max(...all.map(p=>p[1]))*1.08||1;
-  const step=Math.pow(10,Math.floor(Math.log10(ymax/3))); const nice=[1,2,2.5,5,10].map(m=>m*step).find(v=>ymax/v<=4)||step*10;
-  const sx=x=>ml+(x-x0)/Math.max(1,x1-x0)*(w-ml-mr), sy=y=>mt+(1-y/(Math.ceil(ymax/nice)*nice))*(h-mt-mb);
-  let g=''; for(let v=0;v<=Math.ceil(ymax/nice)*nice+1e-9;v+=nice){ const y=sy(v); g+=`<line x1="${ml}" x2="${w-mr}" y1="${y}" y2="${y}" stroke="#26333c" stroke-width="1"/><text x="${ml-6}" y="${y+3.5}" fill="#8a949b" font-size="10" text-anchor="end" font-family="IBM Plex Mono,monospace">${yfmt(v)}</text>`; }
+  let ymax=Math.max(...all.map(p=>p[1])), ymin=signed?Math.min(0,...all.map(p=>p[1])):0; ymax=(signed?Math.max(ymax,0.5):ymax)*1.08||1;
+  const span=ymax-ymin; const step=Math.pow(10,Math.floor(Math.log10(span/3))); const nice=[1,2,2.5,5,10].map(m=>m*step).find(v=>span/v<=4)||step*10;
+  const lo=Math.floor(ymin/nice)*nice, hi=Math.ceil(ymax/nice)*nice;
+  const sx=x=>ml+(x-x0)/Math.max(1,x1-x0)*(w-ml-mr), sy=y=>mt+(1-(y-lo)/(hi-lo))*(h-mt-mb);
+  let g=''; for(let v=lo;v<=hi+1e-9;v+=nice){ const y=sy(v); g+=`<line x1="${ml}" x2="${w-mr}" y1="${y}" y2="${y}" stroke="#26333c" stroke-width="1"/><text x="${ml-6}" y="${y+3.5}" fill="#8a949b" font-size="10" text-anchor="end" font-family="IBM Plex Mono,monospace">${yfmt(v)}</text>`; }
   const xt=[x0,Math.round((x0+x1)/2),x1]; for(const x of xt) g+=`<text x="${sx(x)}" y="${h-6}" fill="#8a949b" font-size="10" text-anchor="${x===x0?'start':x===x1?'end':'middle'}" font-family="IBM Plex Mono,monospace">${x<0?'BC'+(-x):x}</text>`;
   const paths=series.map(s=>{ const d=s.pts.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join(''); const last=s.pts[s.pts.length-1];
     return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5 4"':''} stroke-linejoin="round"/>`+(s.dash?'':`<circle cx="${sx(last[0])}" cy="${sy(last[1])}" r="4" fill="${s.color}" stroke="#121a20" stroke-width="2"/>`); }).join('');
@@ -473,6 +518,7 @@ function drawCharts(P){
   const s1=[{name:P.name,color:'#d6a94f',pts:S.map(h=>[h.y,h.pp])}];
   if(real) s1.push({name:real.n,color:'#8a949b',dash:true,pts:S.filter(h=>h.y>=real.t[0][0]).map(h=>[h.y,ENG.interpLog(real.t,h.y)])});
   const c1=document.getElementById('ch1'); if(c1) lineChart(c1,s1,popFmt);
+  const c3=document.getElementById('ch3'); if(c3) lineChart(c3,[{name:'당신의 세계',color:'#d6a94f',pts:S.map(h=>[h.y,h.tp||0])},{name:'실제 역사',color:'#8a949b',dash:true,pts:S.map(h=>[h.y,h.tr||0])}],(v,full)=>(v>=0?'+':'')+(+v).toFixed(full?2:1)+'°',true);
   const c2=document.getElementById('ch2'); if(c2) lineChart(c2,[{name:'당신의 세계',color:'#d6a94f',pts:S.map(h=>[h.y,h.wp])},{name:'실제 역사',color:'#8a949b',dash:true,pts:S.map(h=>[h.y,h.wr])}],popFmt);
 }
 
@@ -489,6 +535,12 @@ function showNext(){
   if(q.kind==='peace'){ const e=G.C[q.from]; if(!e.alive||!ENG.findWar(G,G.player,q.from)) return;
     showModal({glyph:'和',when:fdate(G),title:`${e.name}의 강화 제의`,who:`전쟁 ${((G.day-ENG.findWar(G,G.player,q.from).since)/365).toFixed(1)}년째`,body:`${esc(e.name)}의 사신이 왔다. 지금 점령한 땅을 서로 인정하고 전쟁을 끝내자고 한다.`,
       opts:[{t:'강화를 받아들인다',tip:'전쟁 종료, 5년 휴전',go:()=>ENG.makePeace(G,G.player,q.from)},{t:'거절하고 싸운다',tip:'전쟁 계속',go:()=>{}}]}); return; }
+  if(q.kind==='relief'){
+    showModal({glyph:q.type==='화산'?'火':'震',when:fdate(G),title:q.name,who:`${P.name} · ${q.type==='화산'?'VEI '+q.M:'규모 '+q.M.toFixed(1)}`,
+      body:`${q.type==='화산'?'화산재와 화쇄류가 마을을 덮쳤다.':'땅이 갈라지고 집과 성벽이 무너졌다.'} 우리 백성 약 <b>${esc(fpop(q.deaths))}</b>이(가) 목숨을 잃었다. 살아남은 사람들이 조정을 바라보고 있다.`,
+      opts:[{t:'창고를 열고 대대적으로 구호한다',tip:`국고 −${fmoney(P.income*0.25)}, 안정도 +0.4, 생산 +3% (2년, 재건)`,go:()=>ENG.act.relief(G,2)},
+            {t:'최소한의 구호만 한다',tip:`국고 −${fmoney(P.income*0.08)}`,go:()=>ENG.act.relief(G,1)},
+            {t:'스스로 일어서게 둔다',tip:'안정도 −0.6',go:()=>ENG.act.relief(G,0)}]}); return; }
   const ev=q.alt?q.ev.pAlt:q.ev; const opts=q.ask?q.ev.po:ev.o;
   const body=(q.ev.at&&q.ev.px&&!q.alt?`<p style="margin:0 0 10px;color:var(--gold2)">${esc(q.ev.px)}</p>`:'')+esc(ev.x||q.ev.x);
   const wasSpeed=speed;
@@ -522,7 +574,10 @@ function showFinal(){
     <div><div class="v">${P.leS.toFixed(1)}세</div><div class="k">기대수명 (실제 세계 ${ENG.interp(D.STATS.worldLE,G.y).toFixed(1)}세)</div></div>
     <div><div class="v">${fpop(wp)}</div><div class="k">세계 인구 (실제 ${fpop(wr)})</div></div>
     <div><div class="v">${P.prov}곳</div><div class="k">영토 (시작 ${first.prov||'—'}곳)</div></div>
-    <div><div class="v">${P.techs.size}/${D.TECH_LIST.length}</div><div class="k">보유 기술</div></div></div>
+    <div><div class="v">${P.techs.size}/${D.TECH_LIST.length}</div><div class="k">보유 기술</div></div>
+    <div><div class="v">${(G.temp||0)>=0?'+':''}${(G.temp||0).toFixed(2)}°C</div><div class="k">세계 기온 (실제 ${ENG.realTemp(G.y)>=0?'+':''}${ENG.realTemp(G.y).toFixed(2)}°C)</div></div>
+    <div><div class="v">${(G.disasters||[]).length}번</div><div class="k">큰 지진·화산 분화</div></div>
+    <div><div class="v">${Object.keys(P.resCnt||{}).length}종</div><div class="k">보유 지하자원</div></div></div>
    <div class="chart" id="chF"></div>
    <h4 class="serif" style="margin:18px 0 6px">연대기에서</h4>
    <ul class="chron">${G.chron.filter(c=>c.g!=='統').slice(-8).reverse().map(c=>`<li><div class="g">${esc(c.g)}</div><div><div class="y">${fy(c.y)}</div><div class="t">${esc(c.t)}</div></div></li>`).join('')}</ul>

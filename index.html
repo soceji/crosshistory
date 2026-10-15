@@ -75,7 +75,10 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .mapctl button.on{color:var(--gold2);border-color:var(--gold)}
 .zoomctl{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:4px;z-index:2}
 .zoomctl button{width:30px;height:30px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:5px;font-size:16px}
-.legend{position:absolute;left:12px;bottom:12px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--fg2);z-index:2;max-width:260px}
+.legend{position:absolute;right:12px;bottom:12px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--fg2);z-index:2;max-width:260px}
+.res-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0}
+.res-row .g{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:11px;color:#0d1318;flex:none}
+.res-row .g.off{background:#283036!important;border:1px solid currentColor}
 .legend .ramp{height:8px;border-radius:2px;margin:4px 0 2px;width:180px}
 .legend .ends{display:flex;justify-content:space-between;width:180px;font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
 
@@ -1611,6 +1614,184 @@ D.RANDOM = [
 </script>
 <script>
 // ───────────────────────────────────────────────────────────────
+//  자연: 지하자원 · 기후 · 지진 · 화산 · 선사 시대 사건
+//  (engine.js 보다 먼저 불러와야 한다 — 사건 목록을 D.EVENTS 에 더한다)
+// ───────────────────────────────────────────────────────────────
+(function(){
+const D = window.GDATA;
+const O = (t, tip, fx, h, dv) => ({t, tip, fx: fx || (()=>{}), h: !!h, dv});
+const H = (t, tip, fx) => O(t, tip, fx, true);
+
+// ── 지하자원 종류 ──
+// units: 매장지 1곳의 연간 가치 (그해 세계 1인당 생산 × 인구 몇 명분인지, 백만 명 단위를 세계 인구 비율로 환산)
+// on(c): 이 나라에서 가치가 있는가 / 반환값은 배수
+D.RES = {
+  obsidian:{n:'흑요석', g:'曜', col:'#6f7d8c', units:6,  on:k=>k('bronze')?0:1, d:'날카로운 화산 유리. 청동기 이전 최고의 도구 재료이자 교역품.'},
+  salt:    {n:'소금',   g:'鹽', col:'#c9c2b0', units:1,  on:k=>k('chem')?0.25:1, d:'생존과 저장의 필수품. 근대 화학 이전에는 국가 전매의 대상.'},
+  copper:  {n:'구리',   g:'銅', col:'#c27a4a', units:2,  on:k=>k('copper')?1:0, d:'인류가 처음 녹인 금속. 전기 시대에 다시 핵심 자원이 된다.'},
+  tin:     {n:'주석',   g:'錫', col:'#9aa6ad', units:2,  on:k=>!k('bronze')?0:k('steel')?0.3:1, d:'구리와 섞으면 청동이 된다. 매장지가 드물어 청동기 교역망을 만들었다.'},
+  iron:    {n:'철',     g:'鐵', col:'#8e5a4a', units:2.5,  on:k=>!k('iron')?0:k('steel')?1.3:1, d:'철기와 강철의 원료. 가야와 변한은 철을 화폐처럼 썼다.'},
+  gold:    {n:'금',     g:'金', col:'#d9b44a', units:1.5,  on:k=>k('bronze')?1:0, d:'화폐와 왕권의 상징.'},
+  silver:  {n:'은',     g:'銀', col:'#c9ced2', units:1.5,  on:k=>k('currency')?1:0, d:'국제 결제 수단. 조선의 연은분리법이 일본 은 생산을 바꿨다.'},
+  coal:    {n:'석탄',   g:'炭', col:'#8f8f86', units:4,  on:k=>!k('steam')?0:k('carbon')?0.15:k('renew')?0.5:1, d:'산업혁명의 연료.'},
+  oil:     {n:'석유',   g:'油', col:'#6f8fb0', units:8,  on:k=>!k('combust')?0:k('carbon')?0.25:k('ev')?0.6:1, d:'20세기의 피. 전쟁과 부의 지도를 다시 그렸다.'},
+  uranium: {n:'우라늄', g:'鈾', col:'#7fa65a', units:1,  on:k=>k('nucpower')||k('nuke')?1:0, d:'원자력 발전과 핵무기의 원료.'},
+  rare:    {n:'희토류·리튬', g:'稀', col:'#8a6fb0', units:1.5, on:k=>!k('semicon')?0:k('ev')?2:1, d:'반도체·배터리·전기 모터의 필수 원료.'}
+};
+// 기술 ↔ 자원: 이 자원을 가졌으면 연구가 20% 싸고, 이웃에게도 없으면 15% 비싸다
+D.TECH_RES = {copper:['copper'], bronze:['copper','tin'], iron:['iron'], currency:['gold','silver'], cokeiron:['coal','iron'], steam:['coal'], steel:['iron','coal'], combust:['oil'], nucpower:['uranium'], nuke:['uranium'], semicon:['rare'], ev:['rare'], renew:['rare']};
+// 자원 부족: 해당 기술을 알지만 우리 땅과 이웃 어디에도 없을 때
+D.SHORT = [
+  {res:['copper','tin'], need:'bronze', until:'iron', fx:{mil:-.06}, n:'청동 원료 부족'},
+  {res:['iron'], need:'iron', fx:{mil:-.08,prod:-.02}, n:'철 부족'},
+  {res:['coal'], need:'steam', until:'renew', fx:{prod:-.05}, n:'석탄 부족'},
+  {res:['oil'], need:'combust', until:'ev', fx:{mil:-.1,prod:-.04}, n:'석유 부족'}
+];
+
+// 실제 매장지 [자원, 경도, 위도, 이름]
+D.DEPOSITS = [
+ // 흑요석 (선사 교역)
+ ['obsidian',128.08,42.0,'백두산'],['obsidian',34.55,38.25,'괼뤼 다으 (아나톨리아)'],['obsidian',24.4,36.7,'멜로스'],['obsidian',14.95,38.48,'리파리'],['obsidian',143.1,43.9,'시라타키 (홋카이도)'],['obsidian',44.5,40.4,'아르메니아 고원'],['obsidian',40,9,'에티오피아 지구대'],['obsidian',-98.7,20.1,'파추카'],['obsidian',-121.2,43.7,'오리건'],['obsidian',138.2,36.1,'와다 고개 (나가노)'],
+ // 소금
+ ['salt',20,50,'비엘리치카'],['salt',13.65,47.56,'할슈타트'],['salt',104.8,29.35,'쯔궁'],['salt',35.5,31.5,'사해'],['salt',-4.8,23.6,'타가자'],['salt',-2.5,53.2,'체셔'],['salt',73,32.7,'케우라 (편자브)'],['salt',-67.5,-20.3,'우유니'],['salt',117.8,38.9,'창루 염전 (발해만)'],['salt',126.3,34.8,'서해안 염전'],
+ // 구리
+ ['copper',33,35,'키프로스'],['copper',35,29.8,'팀나'],['copper',-6.6,37.7,'리오 틴토'],['copper',-68.9,-22.3,'추키카마타'],['copper',-69.1,-24.3,'에스콘디다'],['copper',-70.5,-17,'페루 남부'],['copper',-110.5,33,'애리조나'],['copper',-112.5,46,'뷰트'],['copper',26.5,-11,'카탕가'],['copper',28,-12.8,'코퍼벨트'],['copper',15.6,60.6,'팔룬'],['copper',59,52,'우랄 남부'],['copper',75,47.5,'카자흐 초원'],['copper',106.9,43,'오유톨고이'],['copper',117.7,29,'더싱 (장시)'],['copper',103,26.1,'둥촨 (윈난)'],['copper',56.5,24.2,'오만 (마간)'],['copper',39.7,38.3,'에르가니'],['copper',55.9,29.9,'사르체슈메'],['copper',139.4,36.6,'아시오'],['copper',133.3,33.9,'벳시'],['copper',137.1,-4.05,'그라스버그'],['copper',114.8,30.1,'퉁뤼산 (후베이)'],
+ // 주석
+ ['tin',-5.2,50.3,'콘월'],['tin',13,50.5,'에르츠산맥'],['tin',101.1,4.6,'킨타 계곡'],['tin',106,-2.2,'방카'],['tin',-66.6,-18.4,'랄라과'],['tin',103.1,23.4,'거주 (윈난)'],['tin',-8,42.5,'갈리시아'],['tin',8.9,9.9,'조스 고원'],['tin',67,39.5,'제라프샨'],['tin',98.4,8,'푸껫'],['tin',110,23,'광시 주석대'],
+ // 철
+ ['iron',6,49,'로렌'],['iron',20.2,67.8,'키루나'],['iron',60,57,'우랄 중부'],['iron',33.4,47.9,'크리비리흐'],['iron',-92.5,47.5,'메사비'],['iron',118.5,-22.5,'필바라'],['iron',-50.5,-6,'카라자스'],['iron',123,41.1,'안산'],['iron',118.7,40,'첸안 (허베이)'],['iron',129.2,42.2,'무산'],['iron',74,15.3,'고아'],['iron',85.5,21.8,'오디샤'],['iron',-67,53,'래브라도'],['iron',-3,43.2,'빌바오'],['iron',-3.2,54.5,'컴벌랜드'],['iron',-8.5,7.6,'님바산'],['iron',38.1,39.4,'디브리이'],['iron',14.5,47.5,'노리쿰'],['iron',129.35,35.6,'달천 (울산)'],['iron',128.8,35.25,'김해 (변한·가야)'],['iron',126.9,36.9,'충주 철산'],['iron',115,32,'다예 (후베이)'],['iron',35.3,33.6,'레바논 산지'],
+ // 금
+ ['gold',27.9,-26.2,'위트워터스랜드'],['gold',-120.8,38.5,'캘리포니아'],['gold',-139,64,'클론다이크'],['gold',144,-37.3,'빅토리아'],['gold',121.5,-30.8,'칼굴리'],['gold',-1.6,6.5,'아샨티'],['gold',-11,13.5,'밤부크'],['gold',33,21,'누비아'],['gold',150,63,'콜리마'],['gold',-43.9,-20,'미나스제라이스'],['gold',-77,-7,'페루 북부'],['gold',-75.5,6.5,'안티오키아'],['gold',-116,40.8,'네바다'],['gold',125.8,40.1,'운산'],['gold',138.4,38,'사도'],['gold',23,46.2,'트란실바니아'],['gold',28,38.5,'팍톨로스 (리디아)'],['gold',64.6,41.5,'무룬타우'],['gold',120.4,37.4,'자오위안'],['gold',59.5,57,'우랄 금광'],
+ // 은
+ ['silver',-65.75,-19.6,'포토시'],['silver',-102.6,22.8,'사카테카스'],['silver',24.05,37.7,'라우리온'],['silver',132.4,35.1,'이와미'],['silver',15.3,49.95,'쿠트나호라'],['silver',13.3,50.9,'프라이베르크'],['silver',-119.6,39.3,'콤스톡'],['silver',-1,37.6,'카르타헤나'],['silver',128.9,40.5,'단천'],['silver',100.5,25,'윈난 은광'],['silver',-99.6,18.6,'탁스코'],
+ // 석탄
+ ['coal',7.2,51.5,'루르'],['coal',19,50.3,'실레시아'],['coal',-3.4,51.7,'사우스웨일스'],['coal',-1.6,55,'뉴캐슬'],['coal',-78,40.5,'펜실베이니아'],['coal',-81,38,'웨스트버지니아'],['coal',113,40,'다퉁'],['coal',109.8,39.6,'오르도스'],['coal',124,41.9,'푸순'],['coal',38,48,'돈바스'],['coal',87,54.5,'쿠즈바스'],['coal',151.2,-32.7,'헌터 밸리'],['coal',148,-22,'보웬 분지'],['coal',86.4,23.75,'자리아'],['coal',116,-1,'칼리만탄'],['coal',29.2,-25.9,'위트뱅크'],['coal',128.98,37.2,'삼척·태백'],['coal',125.9,39.4,'평안 탄전'],['coal',130.7,33.6,'지쿠호'],['coal',142,43,'유바리'],['coal',-105.5,44,'파우더리버'],['coal',112.5,37.8,'산시 탄전'],['coal',4,50.4,'왈로니'],['coal',2.9,50.4,'노르파드칼레'],
+ // 석유
+ ['oil',49.3,25.4,'가와르'],['oil',48,29,'부르간'],['oil',47.5,30.5,'바스라'],['oil',44.4,35.5,'키르쿠크'],['oil',49,31.3,'후제스탄'],['oil',50.8,30.3,'가치사란'],['oil',49.9,40.4,'바쿠'],['oil',-102,31.8,'퍼미안 분지'],['oil',-94.7,32.3,'동텍사스'],['oil',-97.5,35.5,'오클라호마'],['oil',-119,35.3,'캘리포니아 유전'],['oil',-148.5,70.3,'프루도 만'],['oil',-111.5,57,'앨버타 오일샌드'],['oil',-71.5,10,'마라카이보'],['oil',-64,8.5,'오리노코'],['oil',-92,19.4,'캄페체 (칸타렐)'],['oil',6.5,5,'니제르 삼각주'],['oil',20,28.5,'시르트 분지'],['oil',6.1,31.7,'하시메사우드'],['oil',76.7,61,'사모틀로르'],['oil',53,54.5,'볼가-우랄'],['oil',5.5,59,'북해 (노르웨이)'],['oil',-2.1,57.1,'북해 (영국)'],['oil',125,46.6,'다칭'],['oil',101.5,1,'수마트라 리아우'],['oil',114.5,4.6,'브루나이'],['oil',-41,-22,'캄푸스 분지'],['oil',13,-8,'앙골라 해상'],['oil',53.4,46.2,'텡기즈'],['oil',56,21,'오만'],['oil',54,23.5,'아부다비'],['oil',51.3,25.3,'카타르'],['oil',33,28.5,'수에즈만'],['oil',26,44.9,'플로이에슈티'],
+ // 우라늄
+ ['uranium',-105.5,58,'아사바스카'],['uranium',68.5,45.4,'인카이'],['uranium',136.9,-30.4,'올림픽 댐'],['uranium',7.4,18.7,'아를리트'],['uranium',15,-22.5,'뢰싱'],['uranium',26.6,-11,'신콜로브웨'],['uranium',12.9,50.4,'야히모프'],['uranium',-109,37.5,'콜로라도 고원'],['uranium',118,50.1,'크라스노카멘스크'],
+ // 희토류·리튬·코발트
+ ['rare',109.97,41.8,'바이윈어보'],['rare',-115.5,35.5,'마운틴 패스'],['rare',-68.2,-23.5,'아타카마 염호'],['rare',-67.5,-20.3,'우유니 염호'],['rare',116,-33.85,'그린부시스'],['rare',115,25.8,'간저우'],['rare',26,-10.7,'콩고 코발트대'],['rare',-66.5,-25,'옴브레 무에르토']
+];
+
+// ── 기후: 1850–1900년 평균 대비 세계 기온 편차 (°C, 고기후 복원·관측·IPCC SSP2-4.5 중간 전망) ──
+D.CLIMATE = {
+  temp: [[-4000,0.35],[-3000,0.3],[-2300,0.2],[-2100,0.05],[-1500,0.1],[-1000,0.05],[-200,0.12],[250,0.1],[450,0.0],[600,-0.2],[700,-0.12],[900,0.0],[1050,0.08],[1250,0.05],[1300,-0.08],[1450,-0.2],[1550,-0.25],[1650,-0.45],[1720,-0.35],[1800,-0.3],[1840,-0.15],[1880,-0.05],[1910,-0.05],[1940,0.2],[1975,0.25],[1990,0.55],[2000,0.75],[2010,0.95],[2020,1.2],[2025,1.4],[2050,2.0],[2075,2.4],[2100,2.7]],
+  // 실제 세계의 화석연료 의존 비율 (탈탄소 진행)
+  fossil: [[1850,1],[2020,1],[2050,0.6],[2100,0.25]]
+};
+// 지진대 [이름, [서,남,동,북], 연간 대지진(피해 규모) 발생 빈도]
+D.SEISMIC = [
+  ['일본 해구',[129.8,30,146,46],0.55],['순다·필리핀 해구',[95,-11,128,20],0.75],['쓰촨·윈난',[97,22,107,36],0.2],['화북',[110,34,120,41],0.07],['히말라야',[70,26,97,37],0.3],
+  ['이란·아나톨리아·캅카스',[26,28,62,42],0.45],['지중해',[12,35,28,42],0.15],['안데스',[-80,-45,-66,5],0.45],['멕시코·중앙아메리카',[-106,8,-80,22],0.3],['캘리포니아',[-125,32,-115,42],0.07],
+  ['알래스카·알류샨',[-170,52,-140,64],0.12],['카리브',[-80,15,-60,20],0.05],['중앙아시아',[65,35,85,45],0.12],['뉴질랜드',[165,-47,179,-34],0.05],['캄차카',[155,50,165,62],0.1],['한반도 동남부',[128,35,130,37],0.015]
+];
+// 화산 [이름, 경도, 위도, 최대 VEI, 연간 VEI4+ 분화 확률]
+D.VOLCANOES = [
+  ['베수비오',14.43,40.82,5,.02],['에트나',15,37.75,4,.03],['산토리니',25.4,36.4,7,.004],['라키·헤클라',-18.2,64,6,.03],['백두산',128.06,41.99,7,.004],['한라산',126.53,33.36,3,.0005],
+  ['후지산',138.73,35.36,5,.01],['사쿠라지마',130.66,31.58,5,.02],['탐보라',118,-8.25,7,.004],['크라카타우',105.42,-6.1,6,.01],['린자니 (사말라스)',116.46,-8.41,7,.003],['므라피',110.45,-7.54,4,.04],
+  ['피나투보',120.35,15.13,6,.006],['마욘',123.69,13.26,4,.03],['클류쳅스카야',160.64,56.06,5,.03],['포포카테페틀',-98.62,19.02,5,.02],['세인트헬렌스',-122.18,46.2,5,.01],['옐로스톤',-110.67,44.43,8,.0002],
+  ['우아이나푸티나',-70.85,-16.61,6,.004],['코토팍시',-78.44,-0.68,5,.015],['니라공고',29.25,-1.52,4,.02],['타우포',176.1,-38.8,7,.002],['펠레',-61.17,14.81,4,.01],['카틀라',-19.05,63.63,5,.015],['훙가 통가',-175.38,-20.55,6,.005],['일로팡고',-89.05,13.67,6,.003]
+];
+
+// ── 선사 시대 무작위 사건 (문자를 모르는 사회) ──
+D.RANDOM_PRE = [
+ {id:'deer',w:3,cat:'獵',t:'사슴 떼의 이동',x:'가을이 오자 강 건너 언덕으로 사슴 떼가 몰려왔다. 젊은 사냥꾼들이 창을 갈고 있다.',o:[H('모두 사냥에 나선다','인구 +1%, 안정도 +0.3',E=>E.mod(E.ptag,{pop:.01,stab:.3})),O('고기를 말려 겨울을 대비한다','비축 +0.3년치',E=>E.mod(E.ptag,{gold:.3}))]},
+ {id:'shell',w:2,cat:'漁',c:E=>E.coastal(E.ptag),t:'조개무지의 풍요',x:'갯벌에 굴과 조개가 넘쳐 마을 옆에 조개껍데기 더미가 높이 쌓인다. 이 패총은 수천 년 뒤 고고학자들이 찾아낼 것이다.',o:[H('바닷가에 머문다','인구 +1.5%',E=>E.mod(E.ptag,{pop:.015})),O('조개 팔찌를 만들어 이웃과 바꾼다','연구 진척 +20%',E=>E.mod(E.ptag,{res:.2}))]},
+ {id:'whale',w:1,cat:'漁',c:E=>E.coastal(E.ptag),t:'바닷가에 떠밀려 온 고래',x:'거대한 고래가 해안에 올라왔다. 사람들은 그 모습을 바위에 새긴다. 울산 반구대 암각화에는 고래와 작살잡이가 300여 점 넘게 새겨져 있다.',o:[H('고래를 나누고 바위에 새긴다','안정도 +0.6, 인구 +1%',E=>E.mod(E.ptag,{stab:.6,pop:.01})),O('고래잡이 배를 만든다','연구 진척 +25%',E=>E.mod(E.ptag,{res:.25}))]},
+ {id:'winter',w:3,cat:'寒',t:'혹독한 겨울',x:'눈이 움집 지붕까지 쌓였다. 저장 구덩이의 도토리가 바닥을 드러낸다.',o:[H('비축한 식량을 나눈다','비축 −0.3년치, 인구 −1%',E=>E.mod(E.ptag,{gold:-.3,pop:-.01})),O('노약자를 남기고 남쪽으로 옮긴다','인구 −3%, 안정도 −0.5',E=>E.mod(E.ptag,{pop:-.03,stab:-.5}))]},
+ {id:'acorn',w:3,cat:'災',t:'도토리 흉작',x:'가뭄으로 참나무 열매가 맺히지 않았다. 숲에서 먹을 것을 찾기 어렵다.',o:[H('강과 바다에서 먹을 것을 찾는다','인구 −1%',E=>E.mod(E.ptag,{pop:-.01})),O('이웃 부족의 숲을 넘본다','가장 약한 이웃과 다툼',E=>{const n=E.weakestNeighbor(E.ptag);if(n)E.war(E.ptag,n);else E.mod(E.ptag,{pop:-.02});},false,3)]},
+ {id:'hunting',w:3,cat:'爭',c:E=>E.neighbors(E.ptag).length>0,t:'사냥터 다툼',x:'이웃 부족의 사냥꾼들이 우리 골짜기에서 멧돼지를 잡아갔다.',o:[H('혼인으로 동맹을 맺는다','안정도 +0.5',E=>E.mod(E.ptag,{stab:.5})),O('몽둥이를 들고 몰아낸다','가장 약한 이웃과 다툼',E=>{const n=E.weakestNeighbor(E.ptag);if(n)E.war(E.ptag,n);},false,3)]},
+ {id:'obsid',w:2,cat:'交',t:'흑요석 상인',x:'먼 화산 지대에서 검고 반짝이는 돌을 지고 온 사람들이 있다. 그 돌로 만든 칼은 뼈도 자른다. 백두산 흑요석은 한반도 남부와 연해주까지 퍼졌다.',o:[H('가죽과 바꾼다','연구 진척 +30%, 비축 −0.1년치',E=>E.mod(E.ptag,{res:.3,gold:-.1})),O('그들의 길을 따라가 본다','개척 속도 +10% (20년)',E=>E.tmod(E.ptag,'colon',.1,20,'교역로'))]},
+ {id:'shaman',w:2,cat:'巫',t:'무당의 꿈',x:'무당이 큰 곰이 마을을 지키는 꿈을 꾸었다고 한다. 사람들이 제단 앞에 모였다.',o:[H('제사를 크게 올린다','안정도 +0.8, 비축 −0.15년치',E=>E.mod(E.ptag,{stab:.8,gold:-.15})),O('사냥 준비가 먼저다','변화 없음',E=>{})]},
+ {id:'fire',w:2,cat:'災',t:'들불',x:'마른 벼락이 떨어져 숲이 불탔다. 짐승이 달아나고 움집 몇 채가 탔다.',o:[H('불탄 자리에 씨를 뿌린다','연구 진척 +20%, 인구 −1%',E=>E.mod(E.ptag,{res:.2,pop:-.01})),O('다른 숲으로 옮긴다','안정도 −0.3',E=>E.mod(E.ptag,{stab:-.3}))]},
+ {id:'flood',w:2,cat:'水',t:'강의 범람',x:'큰비에 강물이 넘쳐 강가 마을이 잠겼다. 물이 빠진 땅에는 기름진 흙이 남았다.',o:[H('높은 언덕에 마을을 다시 짓는다','비축 −0.2년치',E=>E.mod(E.ptag,{gold:-.2})),O('강가에 그대로 산다','인구 −2%, 비축 +0.2년치 (기름진 흙)',E=>E.mod(E.ptag,{pop:-.02,gold:.2}))]},
+ {id:'seeds',w:3,cat:'農',c:E=>!E.knows(E.ptag,'agri'),t:'낯선 씨앗',x:'서쪽에서 온 사람들이 작은 낟알을 땅에 묻어 기른다. 조와 기장이다. 한반도에서는 기원전 3500년 무렵부터 조·기장 농사가 퍼졌다.',o:[H('씨앗을 얻어 심어 본다','농경 연구 진척 +60%',E=>{E.mod(E.ptag,{res:.6});}),O('사냥과 채집이면 충분하다','안정도 +0.2',E=>E.mod(E.ptag,{stab:.2}))]},
+ {id:'wolf',w:2,cat:'獸',c:E=>!E.knows(E.ptag,'domest'),t:'늑대 새끼',x:'아이들이 어미 잃은 늑대 새끼를 데려왔다. 사람을 잘 따른다.',o:[H('길러 본다','연구 진척 +40% (가축화로 가는 길)',E=>E.mod(E.ptag,{res:.4})),O('숲에 돌려보낸다','변화 없음',E=>{})]},
+ {id:'boats',w:2,cat:'舟',c:E=>E.coastal(E.ptag),t:'바다 건너온 사람들',x:'통나무배를 탄 낯선 사람들이 해안에 닿았다. 말은 통하지 않지만 토기를 내민다.',o:[H('마을에 받아들인다','인구 +2%, 안정도 −0.2',E=>E.mod(E.ptag,{pop:.02,stab:-.2})),O('물건만 바꾸고 돌려보낸다','연구 진척 +20%',E=>E.mod(E.ptag,{res:.2}))]},
+ {id:'eclipse',w:1,cat:'天',t:'해가 먹히다',x:'한낮에 해가 검게 가려졌다. 짐승들이 울고 사람들이 엎드렸다.',o:[H('하늘에 제사를 올린다','안정도 +0.4',E=>E.mod(E.ptag,{stab:.4})),O('족장의 잘못이라 여긴다','안정도 −0.8',E=>E.mod(E.ptag,{stab:-.8}))]},
+ {id:'dolmen',w:2,cat:'石',c:E=>E.knows(E.ptag,'village'),t:'큰 돌무덤',x:'세상을 떠난 족장을 위해 수십 톤의 덮개돌을 끌어 올리자는 말이 나왔다. 전 세계 고인돌의 약 40%가 한반도에 있다.',o:[H('온 마을이 돌을 끈다','안정도 +0.7, 비축 −0.2년치',E=>E.mod(E.ptag,{stab:.7,gold:-.2})),O('작은 돌널무덤으로 한다','변화 없음',E=>{})]},
+ {id:'babies',w:2,cat:'人',t:'아이들이 늘다',x:'좋은 해가 이어지자 아이가 많이 태어났다. 하지만 다섯 살을 넘기는 아이는 절반 남짓이다.',o:[H('함께 기른다','인구 +2%',E=>E.mod(E.ptag,{pop:.02}))]},
+ {id:'sick',w:2,cat:'疫',t:'이름 모를 병',x:'열이 나고 피를 토하는 병이 돌았다. 무당도 고치지 못한다.',o:[H('병자를 따로 움집에 둔다','인구 −2%',E=>E.mod(E.ptag,{pop:-.02})),O('마을을 버리고 떠난다','인구 −1%, 안정도 −0.6',E=>E.mod(E.ptag,{pop:-.01,stab:-.6}))]},
+ {id:'hunter',w:2,cat:'獵',t:'사냥꾼의 부상',x:'가장 날랜 사냥꾼이 멧돼지에게 받혀 다리를 잃었다.',o:[H('그에게 창 만드는 일을 맡긴다','연구 진척 +15%',E=>E.mod(E.ptag,{res:.15})),O('새 사냥꾼을 기른다','군사력 −5%',E=>E.mod(E.ptag,{army:-.05}))]},
+ {id:'potter',w:2,cat:'工',t:'솜씨 좋은 토기장이',x:'한 여인이 빗살 무늬를 촘촘히 새긴 큰 독을 구웠다. 곡식이 상하지 않는다.',o:[H('기술을 배우게 한다','연구 진척 +30%',E=>E.mod(E.ptag,{res:.3})),O('독을 이웃과 바꾼다','비축 +0.2년치',E=>E.mod(E.ptag,{gold:.2}))]},
+ {id:'chief',w:2,cat:'爭',t:'족장 자리 다툼',x:'늙은 족장이 죽자 두 아들이 서로 무리를 이끌겠다고 나섰다.',o:[H('원로 회의가 정한다','안정도 −0.3',E=>E.mod(E.ptag,{stab:-.3})),O('힘센 쪽이 차지한다','안정도 −0.8, 군사력 +10%',E=>E.mod(E.ptag,{stab:-.8,army:.1}))]}
+];
+D.RANDOM_PRE.forEach(r=>r.pre=true);
+
+// ── 자연재해·기후·질병의 실제 기록 (역사 개변과 무관하게 일어난다) ──
+const ev=(y,m,d,cat,t,x,fx,ex)=>Object.assign({y,m,d,tag:null,cat,t,x,o:[H('','',fx)],nature:1},ex||{});
+const N_ = [
+ // 선사
+ ev(-2200,1,1,'旱','4.2ka 대가뭄','기원전 2200년 무렵 수백 년간 이어진 건조기가 시작되었다. 아카드 제국이 무너지고, 이집트 고왕국이 분열하고, 인더스 도시들이 쇠퇴했다. 고기후학이 "4.2ka 사건"이라 부르는 기후 변동이다.',
+   E=>{E.plague([25,15,80,40],.15);E.all(t=>{const c=E.c(t);if(c&&E.provsIn(t,[25,15,80,40])>0)E.mod(t,{stab:-1.2});});E.cool(-0.15,150,'4.2ka 건조기');}),
+ ev(-1628,1,1,'火','산토리니 (테라) 대분화','에게해의 테라 섬이 VEI 7 규모로 폭발했다. 화산재가 크레타 미노아 문명을 덮고 해일이 지중해 연안을 휩쓸었다.',E=>E.erupt('산토리니',7)),
+ // 고대·중세
+ ev(79,8,24,'火','베수비오 분화','폼페이와 헤르쿨라네움이 화산재에 묻혔다.',E=>E.erupt('베수비오',5)),
+ ev(365,7,21,'震','크레타 대지진과 지중해 해일','규모 8 이상의 지진이 해일을 일으켜 알렉산드리아까지 덮쳤다.',E=>E.quake(23.5,35.3,8.3,'크레타 대지진')),
+ ev(526,5,20,'震','안티오키아 대지진','동로마의 대도시 안티오키아가 무너져 약 25만 명이 죽었다고 전한다.',E=>E.quake(36.16,36.2,7.0,'안티오키아 대지진',.08)),
+ ev(536,3,1,'寒','536년 — 해가 빛을 잃은 해','정체 모를 화산 폭발로 북반구 하늘이 18개월 동안 흐려졌다. 여름에 눈이 내리고 작물이 자라지 못했다. 540년의 두 번째 분화가 뒤를 이었다.',E=>{E.cool(-1.2,4,'536년 화산 겨울');E.plague([-12,30,140,62],.04);}),
+ ev(541,6,1,'疫','유스티니아누스 역병','이집트에서 시작된 페스트가 콘스탄티노폴리스를 덮쳤다. 지중해 세계 인구의 4분의 1이 죽었다는 추정도 있다.',E=>E.plague([-10,24,50,50],.2)),
+ ev(779,3,1,'震','경주 대지진','〈삼국사기〉 혜공왕 15년: "서울에 지진이 일어나 민가가 무너지고 죽은 사람이 백여 명이었다." 한반도 역사상 기록된 가장 큰 지진 가운데 하나다.',E=>E.quake(129.22,35.84,6.5,'경주 대지진',.004)),
+ ev(946,11,1,'火','백두산 천년 대분화','백두산이 VEI 7 규모로 폭발했다. 지난 2000년 동안 가장 큰 분화 가운데 하나로, 화산재가 일본 홋카이도까지 날아갔다. 발해 멸망(926) 직후의 일이다.',E=>E.erupt('백두산',7)),
+ ev(1138,10,11,'震','알레포 대지진','시리아 북부를 뒤흔든 지진으로 수만 명이 죽었다.',E=>E.quake(37.15,36.2,7.1,'알레포 대지진',.04)),
+ ev(1257,6,1,'火','사말라스 대분화','인도네시아 롬복 섬의 사말라스 화산이 폭발했다. 극지 빙하에 남은 황산염으로 보아 지난 2000년 중 가장 큰 분화다. 이듬해 런던에서 대기근이 났다.',E=>E.erupt('린자니 (사말라스)',7)),
+ ev(1315,5,1,'寒','유럽 대기근','소빙기의 시작과 함께 3년 연속 비가 그치지 않았다. 북유럽 인구의 10~15%가 굶어 죽었다.',E=>E.plague([-10,45,30,62],.1)),
+ ev(1452,12,1,'火','쿠와에 분화','남태평양 바누아투의 쿠와에 칼데라가 폭발했다. 이듬해 유럽과 중국에 혹한이 닥쳤다.',E=>E.cool(-0.5,3,'쿠와에 분화')),
+ ev(1518,7,2,'震','한양 지진','〈중종실록〉: "유시에 세 차례 크게 지진이 일었다. 그 소리가 우레 같고 담과 성첩이 무너졌다." 서울에서 기록된 가장 큰 지진이다.',E=>E.quake(127,37.57,6.0,'한양 지진',.002)),
+ ev(1556,1,23,'震','산시 대지진 — 인류사 최악의 지진','명 가정제 때 산시성 화현 일대를 덮친 지진으로 약 83만 명이 죽었다. 사람들이 살던 황토 동굴집(야오둥)이 무너졌다.',E=>E.quake(109.7,34.5,8.0,'산시 대지진',.12)),
+ ev(1600,2,19,'火','우아이나푸티나 분화','페루 남부의 화산이 폭발했다. 1601~1603년 러시아에서 대기근이 일어나 인구의 3분의 1이 죽었다.',E=>{E.erupt('우아이나푸티나',6);E.plague([25,48,60,62],.12);}),
+ ev(1670,6,1,'寒','경신대기근','소빙기의 절정. 현종 11~12년 냉해·가뭄·홍수·전염병이 겹쳐 조선 인구의 약 5~10%가 죽었다. 4년 뒤 같은 해 을병대기근(1695~1699)이 또 닥친다.',E=>E.plague([124,33,131,43],.07)),
+ ev(1755,11,1,'震','리스본 대지진','만성절 아침 규모 8.5의 지진과 해일, 화재가 리스본을 무너뜨렸다. 볼테르는 〈캉디드〉로 신의 섭리를 비꼬았다.',E=>E.quake(-9.14,38.72,8.5,'리스본 대지진',.06)),
+ ev(1783,6,8,'火','라키 분화','아이슬란드 라키 화산이 8개월 동안 용암과 유독가스를 뿜었다. 아이슬란드 인구의 5분의 1이 죽고 유럽에 기근이 돌았다.',E=>{E.erupt('라키·헤클라',6);E.plague([-10,45,25,60],.02);}),
+ ev(1815,4,10,'火','탐보라 대분화 — 여름이 없는 해','인도네시아 탐보라 화산이 VEI 7로 폭발했다. 기록된 역사상 가장 큰 분화. 이듬해 1816년 북반구에는 여름이 오지 않았고, 조선에도 냉해가 들었다.',E=>E.erupt('탐보라',7)),
+ ev(1821,8,1,'疫','콜레라의 첫 대유행','벵골에서 시작된 콜레라가 아시아 전역에 퍼졌다. 순조 21년 조선에서는 "괴질"로 열흘 만에 평양에서 수만 명이 죽었다고 기록되어 있다.',E=>E.plague([60,0,135,45],.02)),
+ ev(1876,1,1,'旱','1876~1878년 대가뭄','엘니뇨로 몬순이 실패했다. 인도와 중국 화북, 브라질에서 3000만~6000만 명이 굶어 죽었다.',E=>{E.plague([68,8,90,30],.03);E.plague([108,32,120,41],.06);E.plague([-45,-12,-35,-3],.03);}),
+ ev(1883,8,27,'火','크라카타우 분화','폭발음이 4800km 떨어진 곳에서도 들렸다. 해일로 3만 6천 명이 죽었다.',E=>E.erupt('크라카타우',6)),
+ ev(1906,4,18,'震','샌프란시스코 대지진','지진과 화재로 도시의 80%가 파괴되었다.',E=>E.quake(-122.42,37.77,7.9,'샌프란시스코 대지진',.01)),
+ ev(1908,12,28,'震','메시나 대지진','시칠리아 메시나에서 약 8만 명이 죽었다.',E=>E.quake(15.55,38.19,7.1,'메시나 대지진',.04)),
+ ev(1923,9,1,'震','간토 대지진','도쿄와 요코하마가 무너지고 불탔다. 10만 명 이상이 죽었다. 혼란 속에 조선인 수천 명이 학살당했다.',E=>{E.quake(139.69,35.69,7.9,'간토 대지진',.02);}),
+ ev(1931,7,1,'水','중국 대홍수','양쯔강과 화이허가 넘쳐 수백만 명이 죽었다. 기록된 가장 치명적인 자연재해로 꼽힌다.',E=>E.plague([110,28,122,34],.03)),
+ ev(1934,5,1,'旱','더스트 볼','미국 대평원에 모래 폭풍이 몰아쳤다. 대공황 속에 수십만 명이 서부로 떠났다.',E=>E.plague([-105,32,-95,42],.02)),
+ ev(1976,7,28,'震','탕산 대지진','허베이성 탕산이 한밤중에 무너졌다. 공식 사망자 24만 명.',E=>E.quake(118.18,39.63,7.6,'탕산 대지진',.06)),
+ ev(1991,6,15,'火','피나투보 분화','20세기 두 번째로 큰 분화. 성층권에 뿌려진 황산염으로 세계 기온이 2년간 약 0.4°C 내려갔다.',E=>E.erupt('피나투보',6)),
+ ev(2004,12,26,'震','인도양 지진 해일','규모 9.1의 수마트라 지진이 일으킨 해일로 14개국에서 23만 명이 죽었다.',E=>{E.quake(95.85,3.3,9.1,'수마트라 대지진',.02);E.plague([79,5,82,10],.002);}),
+ ev(2008,5,12,'震','쓰촨 대지진','규모 7.9. 학교 건물이 무너져 많은 아이들이 희생되었다. 사망·실종 약 8만 7천 명.',E=>E.quake(103.4,31,7.9,'쓰촨 대지진',.006)),
+ ev(2010,1,12,'震','아이티 대지진','규모 7.0의 지진이 수도 포르토프랭스를 덮쳤다. 사망자 추정 10만~30만 명.',E=>E.quake(-72.3,18.5,7.0,'아이티 대지진',.03)),
+ ev(2011,3,11,'震','동일본 대지진과 후쿠시마 원전 사고','규모 9.0의 지진과 해일로 약 1만 8천 명이 죽고 후쿠시마 제1원전이 녹아내렸다.',E=>{E.quake(142.37,38.3,9.0,'동일본 대지진',.004);E.all(t=>{if(E.knows(t,'nucpower'))E.mod(t,{stab:-.1});});}),
+ ev(2016,9,12,'震','경주 지진','규모 5.8. 1978년 계기 관측 이래 한반도에서 가장 강한 지진이었다. 이듬해 11월 포항에서 규모 5.4 지진이 이어졌다.',E=>E.quake(129.19,35.77,5.8,'경주 지진',.00005)),
+ ev(2022,1,15,'火','훙가 통가 분화','해저 화산 폭발의 충격파가 지구를 여러 바퀴 돌았다. 성층권에 수증기 1억 톤이 뿌려졌다.',E=>E.erupt('훙가 통가',5)),
+ ev(2023,2,6,'震','튀르키예·시리아 대지진','규모 7.8과 7.5의 지진이 잇달아 일어나 5만 9천 명 이상이 죽었다.',E=>E.quake(37.2,37.2,7.8,'튀르키예·시리아 대지진',.008))
+];
+// ── 선사 시대의 역사 사건 ──
+const pre=(y,m,d,tag,cat,t,x,o,ex)=>Object.assign({y,m,d,tag,cat,t,x,o},ex||{});
+const P_ = [
+ pre(-3800,1,1,'KR_NEO','工','빗살무늬토기의 확산','바닥이 뾰족한 큰 독에 빗살 같은 무늬를 새긴 토기가 한반도 전역에 퍼졌다. 서울 암사동, 부산 동삼동 같은 강가와 바닷가 마을에서 많이 나온다.',
+   [H('무늬를 새긴 독에 곡식을 저장한다','토기 습득, 안정도 +0.3',E=>{E.tech('KR_NEO','pottery');E.mod('KR_NEO',{stab:.3});})],{cond:E=>E.has('KR_NEO')}),
+ pre(-3500,6,1,'KR_NEO','漁','반구대 암각화','태화강 절벽 바위에 고래와 사슴, 작살을 든 사람들이 새겨졌다. 세계에서 가장 오래된 고래잡이 그림 가운데 하나다.',
+   [H('바위에 새긴다','안정도 +0.5, 어로 습득',E=>{E.tech('KR_NEO','fish');E.mod('KR_NEO',{stab:.5});}),O('고래잡이 배를 늘린다','통나무배 습득, 인구 +2%',E=>{E.tech('KR_NEO','boat');E.mod('KR_NEO',{pop:.02});},false,2)],{cond:E=>E.has('KR_NEO')}),
+ pre(-3500,1,1,'URUK','工','바퀴의 발명','메소포타미아에서 도공의 물레가 수레바퀴가 되었다.',[H('수레를 만든다','바퀴 습득',E=>E.tech('URUK','wheel'))],{cond:E=>E.has('URUK')}),
+ pre(-3300,1,1,'URUK','兵','청동의 시대','구리에 주석을 섞으면 더 단단한 금속이 된다는 것을 알아냈다. 주석은 멀리 아나톨리아와 중앙아시아에서 들여와야 했다.',[H('청동을 주조한다','청동기 습득',E=>E.tech('URUK','bronze'))],{cond:E=>E.has('URUK')}),
+ pre(-3000,1,1,'KR_NEO','農','조·기장 농사','한반도 중서부의 마을들에서 조와 기장을 기르기 시작했다. 돌보습과 갈돌이 쓰인다. 여전히 사냥과 채집이 식량의 대부분이다.',
+   [H('밭을 일군다','농경 습득',E=>E.tech('KR_NEO','agri')),O('숲과 바다를 지킨다','안정도 +0.5, 농경 지연 (역사 개변 +4)',E=>E.mod('KR_NEO',{stab:.5}),false,4)],{cond:E=>E.has('KR_NEO')}),
+ pre(-3000,6,1,'MEGALITH','石','스톤헨지','솔즈베리 평원에 둥근 도랑과 둑이 만들어졌다. 거대한 사르센 돌은 500년 뒤에 세워진다.',[H('돌을 세운다','안정도 +1',E=>E.mod('MEGALITH',{stab:1}))],{cond:E=>E.has('MEGALITH')}),
+ pre(-2900,1,1,'YANGSHAO','農','룽산 문화','황하 유역에 흑도를 굽고 성벽을 두른 마을들이 생겼다. 계층이 나뉘기 시작한다.',[H('성을 쌓는다','정착 마을·석조 건축 습득',E=>{E.tech('YANGSHAO','village');E.tech('YANGSHAO','masonry');})],{cond:E=>E.has('YANGSHAO')}),
+ pre(-2700,1,1,'CUCUTENI','災','쿠쿠테니 거대 마을의 소멸','인구 1만 명이 넘던 우크라이나의 거대 정착지들이 비워졌다. 스텝 유목민이 다가온다.',[H('흩어진다','안정도 −1.5, 인구 −20%',E=>E.mod('CUCUTENI',{stab:-1.5,pop:-.2}))],{cond:E=>E.has('CUCUTENI')}),
+ pre(-2500,1,1,'YAMNAYA','兵','말을 탄 사람들','얌나야 사람들이 말과 바퀴 달린 수레로 초원을 가로질렀다. 그들의 언어는 훗날 인도유럽어족이 된다. 유럽인 유전자의 상당 부분이 이때 들어왔다.',
+   [H('서쪽과 동쪽으로 퍼진다','기마술 습득, 쿠쿠테니 지역 장악',E=>{E.tech('YAMNAYA','horse');E.conquer('YAMNAYA','CUCUTENI',{share:1});})],{cond:E=>E.has('YAMNAYA')}),
+ pre(-2000,1,1,'*KRPRE','兵','민무늬토기와 청동기 문화','요동과 한반도 북부로 청동기를 가진 사람들이 들어왔다. 무늬 없는 토기와 반달돌칼, 간돌검을 쓴다.',
+   [H('청동기를 받아들인다','구리 제련·청동기 연구 진척, 군사력 +10%',E=>{const t=E.krPre();E.tech(t,'copper');E.mod(t,{res:.5,army:.1});})],{cond:E=>!!E.krPre()}),
+ pre(-1300,1,1,'*KRPRE','石','고인돌의 시대','덮개돌 무게가 수십 톤에 이르는 고인돌이 한반도 곳곳에 세워졌다. 고창·화순·강화의 고인돌 유적은 세계유산이다. 전 세계 고인돌의 약 40%가 한반도에 있다.',
+   [H('족장의 무덤을 세운다','석조 건축 습득, 안정도 +0.6',E=>{const t=E.krPre();E.tech(t,'masonry');E.mod(t,{stab:.6});}),O('그 힘으로 성책을 두른다','석조 건축 습득, 방어력 +0.15 (100년)',E=>{const t=E.krPre();E.tech(t,'masonry');E.tmod(t,'def',.15,100,'목책');},false,3)],{cond:E=>!!E.krPre()}),
+ pre(-1100,1,1,'*KRPRE','農','벼농사의 전래','장강 하류에서 시작된 벼농사가 산둥을 거쳐 한반도 남부까지 왔다. 부여 송국리에서는 탄화미와 집터 수십 채가 나왔다.',
+   [H('논을 만든다','관개 농업 습득, 인구 +3%',E=>{const t=E.krPre();E.tech(t,'irrig');E.mod(t,{pop:.03});})],{cond:E=>!!E.krPre()})
+];
+D.EVENTS.push(...N_, ...P_);
+})();
+
+</script>
+<script>
+// ───────────────────────────────────────────────────────────────
 //  시뮬레이션 엔진 (DOM 없음 — 노드에서도 실행 가능)
 // ───────────────────────────────────────────────────────────────
 (function(root){
@@ -1673,7 +1854,15 @@ const PNAME = new Array(N).fill(null);
   }
 })();
 
-ENG.map = {W, H:Hh, N, cellId, PLON, PLAT, PAREA, PTER, PCOAST, ADJ, SEA, PNAME, lon0:M.lon0, lat0:M.lat0, res:M.res, nearestProv, hav};
+// ── 지하자원 배치 (실제 매장지 → 가장 가까운 지방) ──
+const PRES = Array.from({length:N},()=>[]);
+const PRESN = Array.from({length:N},()=>[]);
+for(const [r,lo,la,nm] of D.DEPOSITS){ const p=nearestProv(lo,la,320); if(p>=0){ PRES[p].push(r); PRESN[p].push(nm); } }
+// ── 지진대·화산 ──
+const PSEIS = new Float32Array(N), PSEISZ = new Int16Array(N).fill(-1);
+D.SEISMIC.forEach(([nm,b,rate],k)=>{ let n=0; for(let i=0;i<N;i++) if(inBox(i,b)) n++; for(let i=0;i<N;i++) if(inBox(i,b)){ const v=rate/Math.max(1,n); if(v>PSEIS[i]){ PSEIS[i]=v; PSEISZ[i]=k; } } });
+const VPROV = D.VOLCANOES.map(v=>nearestProv(v[1],v[2],300));
+ENG.map = {W, H:Hh, N, cellId, PLON, PLAT, PAREA, PTER, PCOAST, ADJ, SEA, PNAME, PRES, PRESN, PSEIS, PSEISZ, VPROV, lon0:M.lon0, lat0:M.lat0, res:M.res, nearestProv, hav};
 
 // ── 유틸 ──
 function interp(tab, y){ if(y<=tab[0][0]) return tab[0][1]; for(let i=1;i<tab.length;i++){ if(y<=tab[i][0]){ const [x0,v0]=tab[i-1],[x1,v1]=tab[i]; return v0+(v1-v0)*(y-x0)/(x1-x0); } } return tab[tab.length-1][1]; }
@@ -1753,6 +1942,10 @@ ENG.newGame = function(eraIdx, playerTag, seed){
   G.kscale = interpLog(D.STATS.worldPop,G.y)*headroom(G.y)/ks;
   for(let p=0;p<N;p++) G.pop[p] = Kprov(G,p)/headroom(G.y);
   G.C.forEach(c=>{ c.inst=clamp(c.inst+[-0.08,0.08,0.3][c.tl],0.35,1.15); c.eff = era.y>=1800 ? [0.33,0.6,1][c.tl] : [0.85,0.95,1][c.tl]; recalc(G,c); c.soldiers = c.pop*0.01*c.armyMul; c.gold = c.income*0.5; autoPolicies(G,c); c.stab=1; recalc(G,c); c._rr=resRate(G,c); });
+  // 기후 초기값 (시작 시점까지는 실제 역사대로 배출했다고 본다)
+  G.cools=[]; G.disasters=[]; G.ce=0; G.ceR=0;
+  for(let y=1850;y<G.y;y++){ const v=interpLog(D.STATS.worldPop,y)*interp(D.STATS.worldGdp,y)*interp(D.CLIMATE.fossil,y); G.ce+=v; G.ceR+=v; }
+  computeTemp(G);
   // 플레이어
   const pc = playerTag ? G.C.find(c=>c.tag===playerTag) : null;
   G.player = pc ? pc.i : G.C[Math.floor(rng(G)*G.C.length)].i;
@@ -1777,9 +1970,16 @@ function techFactor(G,c){ const k=G.y<1750?0.045:G.y<1900?0.025:0.012; return cl
 function Kprov(G,p){
   const o=G.owner[p]; const real=interpLog(D.STATS.worldPop, G.y);
   let f; if(o<0){ f = G.y< -2000?0.9 : G.y<500?0.45 : G.y<1500?0.35 : G.y<1900?0.25 : 0.4; } else { const c=G.C[o]; f = c._tf!==undefined?c._tf:techFactor(G,c); }
-  return real*pw(p,G.y)/wsum(G.y)*f*headroom(G.y)*(G.kscale||1);
+  return real*pw(p,G.y)/wsum(G.y)*f*headroom(G.y)*(G.kscale||1)*(G._noClim?1:climF(p,G.temp||0));
 }
 
+function climF(p,T){
+  const a=Math.abs(PLAT[p]); let f=1;
+  if(T<0 && a>35) f=1+0.15*T;
+  if(T>1){ if(a<30) f=1-0.06*(T-1); else if(a>50) f=1+0.04*(T-1); }
+  return clamp(f,0.6,1.2);
+}
+ENG.climF=climF;
 function headroom(y){ return interp([[-5000,1.15],[1750,1.15],[1850,1.35],[1920,1.8],[1960,2.4],[2100,2.4]],y); }
 // ── 효과 합산 ──
 const FXKEYS=['tax','prod','mil','def','res','lit','life','stab','colon','naval','demo','manp','tfr','growth'];
@@ -1799,10 +1999,19 @@ function mods(G,c){
 ENG.mods = mods;
 
 function recalc(G,c){
-  let pop=0,n=0,area=0,coast=0;
-  for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; }
-  c.pop=pop; c.prov=n; c.area=area; c.coast=coast;
+  let pop=0,n=0,area=0,coast=0; const rc={};
+  for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; for(const r of PRES[p]) rc[r]=(rc[r]||0)+1; }
+  c.pop=pop; c.prov=n; c.area=area; c.coast=coast; c.resCnt=rc;
   const s=mods(G,c); c.m=s;
+  // 자원 부족 (우리 땅과 이웃 어디에도 없을 때)
+  const kn=id=>c.techs.has(id);
+  c.short=[];
+  for(const sh of D.SHORT){ if(!kn(sh.need)||(sh.until&&kn(sh.until))) continue; const have=sh.res.some(r=>rc[r]||(c._nbRes&&c._nbRes.has(r))); if(!have){ c.short.push(sh.n); for(const k in sh.fx) s[k]=(s[k]||0)+sh.fx[k]; } }
+  // 자원 수입: 매장지 1곳 = 세계 평균 생산 × (units × 세계인구/78억 × 100만 명)
+  const ws=interpLog(D.STATS.worldPop,G.y)/7.8e9*1e6*900*Math.sqrt(interp(D.STATS.worldGdp,G.y)/900);
+  let ri=0; c.resVal={};
+  for(const r in rc){ const R=D.RES[r]; const on=R.on(kn); if(!on) continue; const v=R.units*on*Math.pow(rc[r],0.85)*ws; c.resVal[r]=v; ri+=v; }
+  c.resIncome=ri;
   c.lit=clamp(s.lit,0,0.99);
   const effn=clamp(((c.eff==null?1:c.eff)-0.2)/0.8,0,1);
   const demo=clamp(s.demo*1.25,0,1)*clamp(0.3+0.7*effn,0,1); c.dev=demo;
@@ -1810,9 +2019,9 @@ function recalc(G,c){
   const dT=clamp(s.demo*1.25,0,1); const tRich=1.5+4.8*Math.pow(1-dT,1.8), tPoor=1.5+4.8*Math.pow(1-dT*0.55,1.2); let tfr=tPoor+(tRich-tPoor)*Math.pow(effn,0.8); if(['kr','jp','cn'].includes(c.cul)&&demo>0.75) tfr-=0.55; if(c.kr&&G.y>2000) tfr-=0.25; tfr+=s.tfr; c.tfr=clamp(tfr,0.6,7.5);
   if(c.tfrS==null) c.tfrS=c.tfr; if(c.leS==null) c.leS=c.le; if(c.eff==null) c.eff=1;
   c.gdppc = c.fx.gdpBase*Math.max(0.3,1+0.5*s.prod)*(0.85+0.05*c.stab)*c.eff;
-  c.gdp = pop*c.gdppc;
+  c.gdp = pop*c.gdppc + c.resIncome*(0.85+0.05*c.stab);
   c.income = c.exile?0: c.gdp*0.07*Math.max(0.05,1+s.tax);
-  c.expense = c.exile?0: c.income*0.42 + c.soldiers*c.gdppc*2 + c.policies.length*c.gdp*0.0025 + (c.gold<0?-c.gold*0.08:0);
+  c.expense = c.exile?0: c.income*0.42 + c.soldiers*c.gdppc*(['tribe','chief'].includes(c.gov)?0.7:2) + c.policies.length*c.gdp*0.0025 + (c.gold<0?-c.gold*0.08:0);
   const q = (1+s.mil)*(0.7+0.1*(c.stab+3)/2)*(1+ (c.m.mil>0?0:0));
   c.qual=q; c.str = c.soldiers*q*(1+0.15*c.techs.size/40);
   c.slots = D.GOVS[c.gov].slots;
@@ -1846,6 +2055,7 @@ function techCost(G,c,id){
   let know=0,alive=0; for(const o of G.C){ if(!o.alive) continue; alive++; if(o.techs.has(id)) know++; }
   m*=1-0.55*(know/Math.max(1,alive));
   if(c._nbKnow && c._nbKnow.has(id)) m*=0.75;
+  const tr=D.TECH_RES[id]; if(tr&&c.resCnt){ if(tr.every(r=>c.resCnt[r])) m*=0.8; else if(!tr.some(r=>c.resCnt[r]||(c._nbRes&&c._nbRes.has(r)))) m*=1.15; }
   return m;
 }
 ENG.techCost=techCost;
@@ -1900,7 +2110,7 @@ ENG.chron=chron; ENG.news=news;
 function recordHist(G){
   let wp=0; for(let p=0;p<N;p++) wp+=G.pop[p];
   const P=G.C[G.player];
-  G.hist.push({y:G.y, wp, wr:interpLog(D.STATS.worldPop,G.y), pp:P.pop, gdp:P.gdppc, le:P.leS, lit:P.lit, tfr:P.tfrS, prov:P.prov, tag:P.tag});
+  G.hist.push({y:G.y, wp, wr:interpLog(D.STATS.worldPop,G.y), pp:P.pop, gdp:P.gdppc, le:P.leS, lit:P.lit, tfr:P.tfrS, prov:P.prov, tag:P.tag, tp:G.temp||0, tr:realTemp(G.y)});
   if(G.hist.length>2500) G.hist.splice(0, G.hist.length-2500);
 }
 
@@ -1924,6 +2134,63 @@ function checkDeaths(G){
       else news(G,`${c.name} 멸망`,'亡'); } }
 }
 
+// ── 기후·재해 ──
+function realTemp(y){ return interp(D.CLIMATE.temp,y); }
+ENG.realTemp=realTemp;
+function coolSum(G){ let s=0; for(const c of (G.cools||[])) if(c.until>G.day) s+=c.dT; return s; }
+function computeTemp(G){
+  let base;
+  if(G.y<1850) base=realTemp(G.y);
+  else { const b0=realTemp(1850); const ratio=G.ceR>0?clamp(G.ce/G.ceR,0,3):1; base=b0+(realTemp(G.y)-b0)*ratio; }
+  G.tempBase=base; G.temp=base+coolSum(G);
+}
+ENG.computeTemp=computeTemp;
+function yearlyEmissions(G){
+  if(G.y<1850) return;
+  const realWorld=interpLog(D.STATS.worldPop,G.y)*interp(D.STATS.worldGdp,G.y);
+  let tot=0,fos=0; for(const c of G.C){ if(!c.alive) continue; tot+=c.gdp; const k=id=>c.techs.has(id); const sh=!k('steam')?0.05:k('carbon')?0.2:k('renew')?0.65:1; fos+=c.gdp*sh; }
+  G.ce=(G.ce||0)+(tot>0?fos/tot:1)*realWorld;
+  G.ceR=(G.ceR||0)+realWorld*interp(D.CLIMATE.fossil,G.y);
+}
+function addCool(G,dT,years,label){ (G.cools=G.cools||[]).push({dT,until:G.day+Math.round(years*365),label}); G.cools=G.cools.filter(c=>c.until>G.day); computeTemp(G); }
+function logDisaster(G,o){ (G.disasters=G.disasters||[]).push(Object.assign({y:G.y,m:G.m},o)); if(G.disasters.length>150) G.disasters.shift(); }
+function quake(G,lon,lat,M,name,share){
+  const p0=nearestProv(lon,lat,400); if(p0<0) return;
+  const r=60*Math.pow(1.8,M-7);
+  let deaths=0; const owners=new Map();
+  for(let p=0;p<N;p++){ const d=pdist(p,p0); if(p!==p0&&d>r) continue;
+    const o=G.owner[p]; const c=o>=0?G.C[o]:null;
+    const resil = c&&c.techs.has('steel')&&c.eff>0.7 ? 0.35 : c&&c.techs.has('masonry')?1:0.7;
+    let k = share!=null ? (p===p0?share:share*0.25*(1-d/r)) : 0.0006*Math.pow(3,M-7)*(p===p0?1:0.25*(1-d/r)) * (G.y<1900?1.5:1);
+    k=clamp(k*resil,0,0.6); const lost=G.pop[p]*k; G.pop[p]-=lost; deaths+=lost;
+    if(o>=0) owners.set(o,(owners.get(o)||0)+lost);
+  }
+  name=name||`${PNAME[p0].replace(/\s.*$/,'')} 지진`;
+  logDisaster(G,{t:'지진',name,M,deaths,p:p0});
+  for(const [o,l] of owners){ const c=G.C[o]; if(l>c.pop*0.002){ c.stab=clamp(c.stab-Math.min(1,l/c.pop*30),-3,3); c.tmods.push({k:'prod',v:-Math.min(0.15,l/c.pop*5),until:G.day+365,label:name}); } }
+  if(deaths>2000||owners.has(G.player)) news(G,`${name} (규모 ${M.toFixed(1)}) — 사망 약 ${fmtPop(deaths)}`,'震');
+  if(owners.has(G.player)&&owners.get(G.player)>50) G.queue.push({kind:'relief',type:'지진',name,deaths:owners.get(G.player),M});
+}
+function erupt(G,vname,vei){
+  const vi=typeof vname==='number'?vname:D.VOLCANOES.findIndex(v=>v[0]===vname); if(vi<0) return; const v=D.VOLCANOES[vi];
+  const p0=VPROV[vi]; const r=40*Math.pow(2,vei-4);
+  let deaths=0; const owners=new Map();
+  if(p0>=0) for(let p=0;p<N;p++){ const d=pdist(p,p0); if(p!==p0&&d>r) continue; const c_=G.owner[p]>=0?G.C[G.owner[p]]:null; const k=clamp(0.002*Math.pow(2,vei-4)*(p===p0?3:(1-d/r))*(c_&&c_.techs.has('radio')?0.4:1),0,0.5); const lost=G.pop[p]*k; G.pop[p]-=lost; deaths+=lost; const o=G.owner[p]; if(o>=0) owners.set(o,(owners.get(o)||0)+lost); }
+  const cool={5:[-0.08,1],6:[-0.35,2],7:[-0.8,3],8:[-2,6]}[vei];
+  if(cool){ addCool(G,cool[0],cool[1],`${v[0]} 분화`); if(cool[0]<=-0.35) ENG.api(G).plague([-180,35,180,72],0.015*Math.abs(cool[0])/0.35); }
+  logDisaster(G,{t:'화산',name:`${v[0]} 분화`,M:vei,deaths,p:p0});
+  for(const [o,l] of owners){ const c=G.C[o]; c.stab=clamp(c.stab-Math.min(1,l/Math.max(1,c.pop)*20),-3,3); }
+  if(vei>=6||owners.has(G.player)) news(G,`${v[0]} 분화 (VEI ${vei})${cool&&cool[0]<-0.2?` — 세계 기온 ${cool[0]}°C`:''}`,'火');
+  if(owners.has(G.player)&&owners.get(G.player)>50) G.queue.push({kind:'relief',type:'화산',name:`${v[0]} 분화`,deaths:owners.get(G.player),M:vei});
+}
+ENG.quake=quake; ENG.erupt=erupt;
+function natureMonth(G){
+  // 지진대
+  D.SEISMIC.forEach(([nm,b,rate],k)=>{ if(rng(G)<rate/12){ const ps=[]; for(let p=0;p<N;p++) if(PSEISZ[p]===k) ps.push(p); if(!ps.length) return; const p=ps[Math.floor(rng(G)*ps.length)];
+    const M = nm.startsWith('한반도') ? 5+rng(G)*1.6 : Math.min(9.3,7-Math.log(1-rng(G))*0.45); quake(G,PLON[p],PLAT[p],M,null); } });
+  // 화산
+  D.VOLCANOES.forEach((v,i)=>{ if(rng(G)<v[4]/12){ const r=rng(G); let vei=r<.7?4:r<.94?5:r<.99?6:r<.999?7:8; vei=Math.min(vei,v[3]); erupt(G,i,vei); } });
+}
 // ── 엔진 API (사건 스크립트용) ──
 function api(G){
   const E = {
@@ -1988,7 +2255,11 @@ function api(G){
       b.alive=false; G.wars=G.wars.filter(w=>w.a!==b.i&&w.b!==b.i); },
     exile:(t,to)=>{ const c=C(G,t),d=C(G,to); if(!c) return; for(let p=0;p<N;p++) if(G.owner[p]===c.i) setOwner(G,p,d?d.i:-1); c.exile=true; c.gov='exile'; c.soldiers=c.soldiers*0.05; G.wars=G.wars.filter(w=>w.a!==c.i&&w.b!==c.i);
       if(c.i===G.player) chron(G,'나라를 잃다',`${c.name}의 영토가 모두 ${d?d.name:'적'}에게 넘어갔다. 독립운동의 길이 시작된다.`,'亡'); },
-    div:n=>{ G.div=clamp(G.div+n,0,100); }
+    div:n=>{ G.div=clamp(G.div+n,0,100); },
+    krPre:()=>{ for(const t of ['GOJOSEON','KR_NEO']) if(has(G,t)) return t; return null; },
+    quake:(lo,la,M,name,share)=>quake(G,lo,la,M,name,share),
+    erupt:(v,vei)=>erupt(G,v,vei),
+    cool:(dT,yrs,label)=>addCool(G,dT,yrs,label)
   };
   return E;
 }
@@ -2210,7 +2481,7 @@ function figMonth(G){
 }
 
 // ── 사건 처리 ──
-function resolveTag(G,E,t){ if(t==='*KOREA') return E.krTag(); return t; }
+function resolveTag(G,E,t){ if(t==='*KOREA') return E.krTag(); if(t==='*KRPRE') return E.krPre(); return t; }
 function evSubject(G,E,ev){
   if(ev.at){ const p=nearestProv(ev.at[0],ev.at[1],300); return p>=0&&G.owner[p]>=0?G.C[G.owner[p]].tag:null; }
   return ev.tag?resolveTag(G,E,ev.tag):null;
@@ -2240,7 +2511,7 @@ function processEvent(G,E,ev){
   }
   // AI 또는 세계 사건: 역사적 선택 자동 적용
   if(ev.tag && !ev.at && !ev.tag.startsWith('*') && !has(G,ev.tag)) return;
-  if(ev.tag==='*KOREA' && !subj) return;
+  if(ev.tag && ev.tag.startsWith('*') && !subj) return;
   const opt = ev.o.find(o=>o.h)||ev.o[0];
   applyOption(G,E,ev,opt,subj,false);
   runAfter(G,E,ev);
@@ -2251,7 +2522,8 @@ function processEvent(G,E,ev){
 
 function randomEvent(G,E){
   const P=G.C[G.player]; if(!P.alive||P.exile) return;
-  const pool=D.RANDOM.filter(r=>(!r.minY||G.y>=r.minY)&&(!r.maxY||G.y<=r.maxY)&&(!r.c||(()=>{try{return r.c(E);}catch(e){return false;}})()));
+  const src = (P.techs.has('writing') && !['tribe','chief'].includes(P.gov)) ? D.RANDOM : D.RANDOM_PRE;
+  const pool=src.filter(r=>(!r.minY||G.y>=r.minY)&&(!r.maxY||G.y<=r.maxY)&&(!r.c||(()=>{try{return r.c(E);}catch(e){return false;}})()));
   if(!pool.length) return;
   let tot=pool.reduce((a,r)=>a+r.w,0), x=rng(G)*tot; let pick=pool[0];
   for(const r of pool){ x-=r.w; if(x<=0){pick=r;break;} }
@@ -2290,6 +2562,8 @@ ENG.tick = function(G){
 
 function monthly(G,E){
   const yr=G.y;
+  computeTemp(G);
+  natureMonth(G);
   // 이웃의 지식 (기술 확산)
   for(const c of G.C){ if(!c.alive) continue; recalc(G,c); }
   // 인구
@@ -2328,7 +2602,7 @@ function monthly(G,E){
     if(c.i!==G.player && c.stab<-1.8 && c.prov>6 && rng(G)<0.01){ rebel(G,c); }
   }
   // 이웃 지식 캐시 (분기마다)
-  if(G.m%3===0){ for(const c of G.C){ if(!c.alive) continue; const s=new Set(); for(const n of neighbors(G,c)) for(const id of G.C[n].techs) s.add(id); c._nbKnow=s; } }
+  if(G.m%3===0){ for(const c of G.C){ if(!c.alive) continue; const s=new Set(), rs=new Set(); for(const n of neighbors(G,c)){ for(const id of G.C[n].techs) s.add(id); for(const r in (G.C[n].resCnt||{})) rs.add(r); } c._nbKnow=s; c._nbRes=rs; } }
   // 플레이어 군주
   const P=G.C[G.player];
   if(P.alive){
@@ -2357,14 +2631,16 @@ function rebel(G,c){
 }
 function renormK(G){
   // 세계 부양력 총합 = 실제 인구 × 여유 × (세계 평균 기술 계수)
-  const save=G.kscale; G.kscale=1; let ks=0, tfw=0, pw_=0;
+  const save=G.kscale; G.kscale=1; G._noClim=true; let ks=0, tfw=0, pw_=0;
   for(let p=0;p<N;p++){ ks+=Kprov(G,p); const o=G.owner[p]; if(o>=0){ const c=G.C[o]; tfw+=G.pop[p]*(c._tf||1); pw_+=G.pop[p]; } }
   const avgTF = pw_>0? clamp(tfw/pw_,0.5,2.5):1;
+  G._noClim=false;
   G.kscale = interpLog(D.STATS.worldPop,G.y)*headroom(G.y)*avgTF/ks;
   if(!isFinite(G.kscale)) G.kscale=save;
 }
 ENG.renormK=renormK;
 function yearly(G,E){
+  yearlyEmissions(G);
   renormK(G);
   recordHist(G);
   const P=G.C[G.player];
@@ -2392,6 +2668,8 @@ ENG.act = {
   target(G,p){ const o=G.owner[p]; const w=findWar(G,G.player,o); if(!w) return false; const side = w.a===G.player?0:1; if(!frontTargets(G,G.player,o).includes(p)) return false; if(side){ w.tb=p; w.pb=0; } else { w.ta=p; w.pa=0; } return true; },
   offerPeace(G,ti){ const P=G.C[G.player]; if(P.lastPeaceAsk>G.day-180) return 'wait'; P.lastPeaceAsk=G.day; if(ENG.playerPeaceAccept(G,ti)){ makePeace(G,G.player,ti); return 'ok'; } return 'no'; },
   develop(G,p){ const P=G.C[G.player]; if(G.owner[p]!==G.player) return false; const cost=P.income*0.1; if(P.gold<cost) return false; P.gold-=cost; G.pop[p]*=1.04; return true; },
+  relief(G,level,lost){ const P=G.C[G.player]; if(level===2){ P.gold-=P.income*0.25; P.stab=clamp(P.stab+0.4,-3,3); P.tmods.push({k:'prod',v:0.03,until:G.day+365*2,label:'재건'}); }
+    else if(level===1){ P.gold-=P.income*0.08; } else { P.stab=clamp(P.stab-0.6,-3,3); } },
   switchTo(G,ci){ G.player=ci; const c=G.C[ci]; c.ruler=null; ensureRuler(G,c,true); c.mob=c.mob||0.012; G.gameOver=null; G.over=false; chron(G,`${c.name}으로 이어가다`,`새로운 나라의 역사를 이끈다.`,'史'); }
 };
 
@@ -2490,6 +2768,7 @@ class MapView{
       if(mode==='pol'||mode==='start'){ c = o<0? TERR[PTER[p]] : ccol[o]; if(mode==='start'&&this.focusTag!=null&&o>=0&&o!==this.focusTag) c=mix(c,[30,38,44],0.55); }
       else if(mode==='pop'){ const dens=g.pop[p]/Math.max(200,PAREA[p]); const t=clamp((Math.log10(dens+0.01)+1)/3.6,0,1); c=mix([28,40,46],[240,207,134],Math.pow(t,0.9)); }
       else if(mode==='tech'){ if(o<0) c=[34,42,48]; else { const v=clamp((g.C[o].techs.size-exp)/12,-1,1); c= v<0? mix([120,124,126],[70,120,170],-v) : mix([120,124,126],[226,178,80],v); } }
+      else if(mode==='res'){ const base=o<0? TERR[PTER[p]] : mix(ccol[o],[30,38,44],0.55); const rk=clamp(MAP.PSEIS[p]*120,0,1); c=mix(base,[150,60,48],rk*0.75); }
       else if(mode==='dip'){ if(o<0) c=[34,42,48]; else if(o===P) c=GOLD; else { const w=ENG.findWar(g,P,o); if(w) c=SEAL; else if(g.C[P].truce[o]>g.day) c=[120,104,150]; else c=[80,92,100]; } }
       pcol[p]=c; pc[p]=pack(c[0],c[1],c[2]);
     }
@@ -2563,6 +2842,17 @@ class MapView{
     }
     if(!this.inter) return;
     const P=g.C[g.player];
+    // 자원·화산 표시
+    if(mode==='res' || s>=6){
+      const kn=id=>P.techs.has(id); const fs=Math.max(9,Math.min(13,s*2.2));
+      ctx.font=`700 ${fs}px 'Noto Serif KR',serif`;
+      for(let p=0;p<N;p++){ const rs=MAP.PRES[p]; if(!rs.length) continue; const [x,y]=this.toScreen(PCX[p],PCY[p]); if(x<-20||x>this.cw+20||y<-20||y>this.ch+20) continue;
+        const uniq=[...new Set(rs)]; uniq.forEach((r,i)=>{ const R=D.RES[r]; const on=R.on(kn)>0; const xx=x+(i-(uniq.length-1)/2)*(fs+5);
+          ctx.beginPath(); ctx.arc(xx,y,fs*0.72,0,7); ctx.fillStyle=on?R.col:'rgba(40,48,54,.85)'; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle=on?'rgba(8,11,14,.8)':R.col; ctx.stroke();
+          ctx.fillStyle=on?'#0d1318':R.col; ctx.fillText(R.g,xx,y+0.5); }); }
+      ctx.font=`700 ${Math.max(11,fs+2)}px sans-serif`;
+      D.VOLCANOES.forEach(v=>{ const [x,y]=this.toScreen((v[1]-MAP.lon0)/MAP.res,(MAP.lat0-v[2])/MAP.res); if(x<-20||x>this.cw+20||y<-20||y>this.ch+20) return; ctx.strokeStyle='rgba(8,11,14,.8)'; ctx.lineWidth=3; ctx.strokeText('▲',x,y); ctx.fillStyle='#e0664f'; ctx.fillText('▲',x,y); });
+    }
     // 수도
     if(P.cap>=0){ const [x,y]=this.toScreen(PCX[P.cap],PCY[P.cap]); ctx.fillStyle='#f0cf86'; ctx.strokeStyle='#1b1407'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,4.5,0,7); ctx.fill(); ctx.stroke(); }
     // 작전 표시
@@ -2624,7 +2914,7 @@ function startGame(g,intro){
 function buildChrome(){
   $('#speeds').innerHTML=`<button class="pause" data-s="0" aria-label="일시정지">❚❚</button>`+SPEEDS.map(s=>`<button data-s="${s}">${s}×</button>`).join('');
   $('#speeds').onclick=e=>{ const b=e.target.closest('button'); if(b) setSpeed(+b.dataset.s); };
-  $('#modes').innerHTML=[['pol','정치'],['pop','인구 밀도'],['tech','기술 수준'],['dip','외교']].map(([k,n])=>`<button data-m="${k}" class="${k===mode?'on':''}">${n}</button>`).join('');
+  $('#modes').innerHTML=[['pol','정치'],['pop','인구 밀도'],['tech','기술 수준'],['dip','외교'],['res','자원·재해']].map(([k,n])=>`<button data-m="${k}" class="${k===mode?'on':''}">${n}</button>`).join('');
   $('#modes').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; mode=b.dataset.m; $('#modes').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); mv.ver=-1; renderLegend(); };
   const TABS=[['state','국정'],['tech','기술'],['inst','제도'],['dip','외교·전쟁'],['fig','인물'],['chron','연대기']];
   $('#tabs').innerHTML=TABS.map(([k,n])=>`<button data-t="${k}" class="${k===tab?'on':''}">${n}</button>`).join('');
@@ -2642,6 +2932,7 @@ function renderLegend(){
   L.hidden=false;
   if(mode==='pop') L.innerHTML=`인구 밀도 (명/km²)<div class="ramp" style="background:linear-gradient(90deg,#1c282e,#f0cf86)"></div><div class="ends"><span>0.1</span><span>10</span><span>1000+</span></div>`;
   if(mode==='tech') L.innerHTML=`실제 역사의 같은 해 대비 기술 수<div class="ramp" style="background:linear-gradient(90deg,#4678aa,#787c7e,#e2b250)"></div><div class="ends"><span>−12</span><span>역사 수준</span><span>+12</span></div>`;
+  if(mode==='res') L.innerHTML=`<div style="margin-bottom:4px">지하자원 <span class="muted">(색이 채워진 것 = 지금 기술로 쓸 수 있음)</span></div><div style="display:grid;grid-template-columns:repeat(3,auto);gap:3px 10px">${Object.values(D.RES).map(r=>`<span><b style="color:${r.col};font-family:var(--f-display)">${r.g}</b> ${r.n}</span>`).join('')}</div><div style="margin-top:6px"><span style="color:#e0664f">▲</span> 화산 · <span style="display:inline-block;width:10px;height:10px;background:#96503c;vertical-align:middle"></span> 지진 위험이 높은 곳</div>`;
   if(mode==='dip') L.innerHTML=`<div style="display:grid;grid-template-columns:12px 1fr;gap:4px 8px;align-items:center"><i style="width:12px;height:12px;background:#d6a94f"></i>우리 나라<i style="width:12px;height:12px;background:#c4452f"></i>교전국<i style="width:12px;height:12px;background:#786896"></i>휴전 중<i style="width:12px;height:12px;background:#505c64"></i>기타 국가</div>`;
 }
 function setSpeed(s){ if(s>0) lastSpeed=s; speed=s; if(s===0) ff=false; updateTop(); }
@@ -2656,10 +2947,11 @@ function updateTop(){
   const cur=P.cur?D.TECHS[P.cur]:null; const cp=cur?clamp(P.prog/(P._cost||ENG.techCost(G,P,P.cur)),0,1):0;
   $('#stats').innerHTML=[
     ['인구',fpop(P.pop)],
-    ['국고',`${fmoney(P.gold)} <small class="${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmoney(net)}/월</small>`],
+    [['tribe','chief'].includes(P.gov)?'비축':'국고',`${fmoney(P.gold)} <small class="${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmoney(net)}/월</small>`],
     ['병력',`${fmoney(P.soldiers)}명`],
     ['안정도',`<span class="${st>=0.5?'pos':st<-0.5?'neg':''}">${st>=0?'+':''}${st.toFixed(1)}</span>`],
     ['연구',cur?`${esc(cur.n)} <small>${pct(cp)}</small>`:'<small>선택 없음</small>'],
+    ['기온',`${(G.temp||0)>=0?'+':''}${(G.temp||0).toFixed(1)}°C`],
     ['역사 개변도',`${G.div.toFixed(0)}%`]
   ].map(([k,v])=>`<div class="pill"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
   // 티커
@@ -2669,6 +2961,17 @@ function updateTop(){
 
 // ── 지방 카드 ──
 function selectProv(p){ sel=p; mv.setHighlight(p); mv.dirty=true; renderCard(); }
+function provNature(p,P){
+  const kn=id=>P.techs.has(id); let h='';
+  const rs=MAP.PRES[p];
+  if(rs.length){ h+=`<div class="sub" style="margin:-2px 0 4px;letter-spacing:.04em">지하자원</div>`+rs.map((r,i)=>{ const R=D.RES[r]; const on=R.on(kn)>0;
+    return `<div class="res-row"><span class="g${on?'':' off'}" style="background:${R.col};color:${on?'#0d1318':R.col}">${R.g}</span><span>${esc(R.n)} <span class="muted">· ${esc(MAP.PRESN[p][i])}</span></span><span class="muted" style="margin-left:auto;font-size:11.5px">${on?'활용 가능':'아직 가치 없음'}</span></div>`; }).join(''); }
+  const z=MAP.PSEISZ[p]; const vs=D.VOLCANOES.map((v,i)=>[v,MAP.hav(PLON[p],PLAT[p],v[1],v[2])]).filter(x=>x[1]<350).sort((a,b)=>a[1]-b[1]);
+  if(z>=0||vs.length){ h+=`<div class="sub" style="margin:8px 0 4px;letter-spacing:.04em">재해 위험</div>`;
+    if(z>=0){ const Z=D.SEISMIC[z]; h+=`<div class="res-row">지진대: ${esc(Z[0])} <span class="muted" style="margin-left:auto">권역 전체에서 대지진 약 ${Math.max(1,Math.round(1/Z[2]))}년에 한 번</span></div>`; }
+    if(vs.length){ const [v,d]=vs[0]; h+=`<div class="res-row"><span style="color:#e0664f">▲</span> ${esc(v[0])} ${Math.round(d)}km <span class="muted" style="margin-left:auto">최대 VEI ${v[3]}</span></div>`; } }
+  return h?`<div style="margin:0 0 10px">${h}</div>`:'';
+}
 function renderCard(){
   const el=$('#pcard'); if(sel<0||!G){ el.hidden=true; return; }
   const p=sel, o=G.owner[p], P=G.C[G.player], c=o>=0?G.C[o]:null;
@@ -2691,6 +2994,7 @@ function renderCard(){
   el.innerHTML=`<button class="x" id="pcx" aria-label="닫기">×</button><h3>${esc(PNAME[p])}</h3>
    <div class="own">${c?`<i style="background:${c.col}"></i>${esc(c.name)}`:'<i style="background:#4a4f45"></i>주인 없는 땅 (원주민 거주)'}</div>
    <dl><dt>인구</dt><dd>${fpop(G.pop[p])}</dd><dt>부양 한계</dt><dd>${fpop(K)}</dd><dt>면적</dt><dd>${Math.round(PAREA[p]).toLocaleString()} km²</dd><dt>지형</dt><dd style="font-family:var(--f-body)">${D.TERRAIN[PTER[p]].n}${MAP.PCOAST[p]?' · 해안':''}</dd><dt>좌표</dt><dd>${PLAT[p].toFixed(1)}°, ${PLON[p].toFixed(1)}°</dd></dl>
+   ${provNature(p,P)}
    <div class="acts">${acts}</div>`;
   $('#pcx').onclick=()=>selectProv(-1);
   const on=(id,fn)=>{ const b=document.getElementById(id); if(b) b.onclick=fn; };
@@ -2731,6 +3035,23 @@ function realRef(P){
   if(P.tag==='DPRK') return null;
   return {n:'실제 한반도 인구 (추정)',t:D.STATS.koreaPop};
 }
+function paneNature(P){
+  const kn=id=>P.techs.has(id); const rc=P.resCnt||{}; const keys=Object.keys(rc);
+  const rows=keys.sort((a,b)=>(P.resVal[b]||0)-(P.resVal[a]||0)).map(r=>{ const R=D.RES[r]; const v=P.resVal[r]||0; const on=v>0;
+    return `<div class="res-row"><span class="g${on?'':' off'}" style="background:${R.col};color:${on?'#0d1318':R.col}">${R.g}</span><span>${esc(R.n)} ×${rc[r]}</span><span class="${on?'num':'muted'}" style="margin-left:auto;font-size:12px">${on?'연 '+fmoney(v):'아직 쓸 수 없음'}</span></div>`; }).join('');
+  const T=G.temp||0, TR=ENG.realTemp(G.y), cools=(G.cools||[]).filter(c=>c.until>G.day);
+  const dis=(G.disasters||[]).slice().reverse().filter(d=>d.deaths>3000||G.owner[d.p]===G.player).slice(0,5);
+  return `<h4>지하자원 <span class="s">자원 수입은 GDP의 ${P.gdp>0?((P.resIncome||0)/P.gdp*100).toFixed(1):0}%</span></h4>
+  ${rows||'<p class="sub">영토 안에 알려진 큰 매장지가 없다. 이웃에게 있으면 교역으로 부족은 면한다.</p>'}
+  ${P.short&&P.short.length?`<p class="factline" style="border-color:var(--seal)">자원 부족: ${P.short.map(esc).join(', ')}. 우리 땅과 이웃 어디에도 없어 군사력과 생산이 떨어진다. 해당 자원이 있는 땅을 개척하거나 차지하라.</p>`:''}
+  <p class="sub">자원을 가진 나라는 관련 기술(청동기·철기·증기기관·내연기관·반도체 등)을 20% 싸게 연구한다.</p>
+  <h4>기후 <span class="s">1850–1900년 평균 대비 세계 기온</span></h4>
+  <table class="cmp"><tr><th></th><th>당신의 세계</th><th>실제 역사</th></tr><tr><td>기온 편차</td><td>${T>=0?'+':''}${T.toFixed(2)}°C</td><td class="r">${TR>=0?'+':''}${TR.toFixed(2)}°C</td></tr></table>
+  ${cools.length?`<p class="sub">화산 냉각 중: ${cools.map(c=>`${esc(c.label)} ${c.dT}°C`).join(', ')}</p>`:''}
+  <p class="sub">추우면 고위도의 부양력이, +1°C를 넘게 더우면 열대의 부양력이 줄어든다. 1850년 이후 기온은 세계 경제의 화석연료 의존도를 따라 실제 역사보다 빨라지거나 느려진다.</p>
+  <div class="chart" id="ch3"></div>
+  ${dis.length?`<h4>최근 재해</h4>`+dis.map(d=>`<div class="res-row"><span style="color:${d.t==='화산'?'#e0664f':'#c3bcac'};font-family:var(--f-display);font-weight:700">${d.t==='화산'?'火':'震'}</span><span>${fy(d.y)} ${esc(d.name)} <span class="muted">${d.t==='화산'?'VEI '+d.M:'규모 '+d.M.toFixed(1)}</span></span><span class="num muted" style="margin-left:auto;font-size:12px">${fpop(d.deaths)}</span></div>`).join(''):''}`;
+}
 function paneState(P){
   const R=P.ruler, age=R?G.y-R.born:0;
   const yrsIn=Math.max(0,G.y-G.startY);
@@ -2758,6 +3079,7 @@ function paneState(P){
   </table>
   <p class="factline">이 나라에서 태어난 아이 100명 중 <b>${Math.round(myU5*100)}명</b>은 다섯 살을 넘기지 못한다. 같은 해 실제 세계 평균은 ${Math.round(u5*100)}명이다.</p>
   ${real?`<p class="sub" style="margin:0 0 4px">「인구」 행의 오른쪽 칸은 ${real.n} 값이다.</p>`:''}
+  ${paneNature(P)}
   <h4>군대 <span class="s">인구 대비 상비 병력 비율</span></h4>
   <div class="slider"><div class="row"><span>동원율</span><b class="num" id="mobv">${(P.mob*100).toFixed(1)}%</b></div>
    <input type="range" id="mob" min="0.2" max="8" step="0.1" value="${(P.mob*100).toFixed(1)}" aria-label="동원율">
@@ -2866,14 +3188,15 @@ function bindPane(P){
 }
 
 // ── 차트 (SVG 선 그래프 + 십자선 툴팁) ──
-function lineChart(el, series, yfmt){
+function lineChart(el, series, yfmt, signed){
   const w=Math.max(260,el.clientWidth||360), h=150, ml=48, mr=8, mt=8, mb=22;
   const all=series.flatMap(s=>s.pts); if(all.length<2){ el.innerHTML='<p class="sub">기록이 쌓이면 그래프가 그려진다.</p>'; return; }
   const x0=Math.min(...all.map(p=>p[0])), x1=Math.max(...all.map(p=>p[0]));
-  const ymax=Math.max(...all.map(p=>p[1]))*1.08||1;
-  const step=Math.pow(10,Math.floor(Math.log10(ymax/3))); const nice=[1,2,2.5,5,10].map(m=>m*step).find(v=>ymax/v<=4)||step*10;
-  const sx=x=>ml+(x-x0)/Math.max(1,x1-x0)*(w-ml-mr), sy=y=>mt+(1-y/(Math.ceil(ymax/nice)*nice))*(h-mt-mb);
-  let g=''; for(let v=0;v<=Math.ceil(ymax/nice)*nice+1e-9;v+=nice){ const y=sy(v); g+=`<line x1="${ml}" x2="${w-mr}" y1="${y}" y2="${y}" stroke="#26333c" stroke-width="1"/><text x="${ml-6}" y="${y+3.5}" fill="#8a949b" font-size="10" text-anchor="end" font-family="IBM Plex Mono,monospace">${yfmt(v)}</text>`; }
+  let ymax=Math.max(...all.map(p=>p[1])), ymin=signed?Math.min(0,...all.map(p=>p[1])):0; ymax=(signed?Math.max(ymax,0.5):ymax)*1.08||1;
+  const span=ymax-ymin; const step=Math.pow(10,Math.floor(Math.log10(span/3))); const nice=[1,2,2.5,5,10].map(m=>m*step).find(v=>span/v<=4)||step*10;
+  const lo=Math.floor(ymin/nice)*nice, hi=Math.ceil(ymax/nice)*nice;
+  const sx=x=>ml+(x-x0)/Math.max(1,x1-x0)*(w-ml-mr), sy=y=>mt+(1-(y-lo)/(hi-lo))*(h-mt-mb);
+  let g=''; for(let v=lo;v<=hi+1e-9;v+=nice){ const y=sy(v); g+=`<line x1="${ml}" x2="${w-mr}" y1="${y}" y2="${y}" stroke="#26333c" stroke-width="1"/><text x="${ml-6}" y="${y+3.5}" fill="#8a949b" font-size="10" text-anchor="end" font-family="IBM Plex Mono,monospace">${yfmt(v)}</text>`; }
   const xt=[x0,Math.round((x0+x1)/2),x1]; for(const x of xt) g+=`<text x="${sx(x)}" y="${h-6}" fill="#8a949b" font-size="10" text-anchor="${x===x0?'start':x===x1?'end':'middle'}" font-family="IBM Plex Mono,monospace">${x<0?'BC'+(-x):x}</text>`;
   const paths=series.map(s=>{ const d=s.pts.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join(''); const last=s.pts[s.pts.length-1];
     return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5 4"':''} stroke-linejoin="round"/>`+(s.dash?'':`<circle cx="${sx(last[0])}" cy="${sy(last[1])}" r="4" fill="${s.color}" stroke="#121a20" stroke-width="2"/>`); }).join('');
@@ -2895,6 +3218,7 @@ function drawCharts(P){
   const s1=[{name:P.name,color:'#d6a94f',pts:S.map(h=>[h.y,h.pp])}];
   if(real) s1.push({name:real.n,color:'#8a949b',dash:true,pts:S.filter(h=>h.y>=real.t[0][0]).map(h=>[h.y,ENG.interpLog(real.t,h.y)])});
   const c1=document.getElementById('ch1'); if(c1) lineChart(c1,s1,popFmt);
+  const c3=document.getElementById('ch3'); if(c3) lineChart(c3,[{name:'당신의 세계',color:'#d6a94f',pts:S.map(h=>[h.y,h.tp||0])},{name:'실제 역사',color:'#8a949b',dash:true,pts:S.map(h=>[h.y,h.tr||0])}],(v,full)=>(v>=0?'+':'')+(+v).toFixed(full?2:1)+'°',true);
   const c2=document.getElementById('ch2'); if(c2) lineChart(c2,[{name:'당신의 세계',color:'#d6a94f',pts:S.map(h=>[h.y,h.wp])},{name:'실제 역사',color:'#8a949b',dash:true,pts:S.map(h=>[h.y,h.wr])}],popFmt);
 }
 
@@ -2911,6 +3235,12 @@ function showNext(){
   if(q.kind==='peace'){ const e=G.C[q.from]; if(!e.alive||!ENG.findWar(G,G.player,q.from)) return;
     showModal({glyph:'和',when:fdate(G),title:`${e.name}의 강화 제의`,who:`전쟁 ${((G.day-ENG.findWar(G,G.player,q.from).since)/365).toFixed(1)}년째`,body:`${esc(e.name)}의 사신이 왔다. 지금 점령한 땅을 서로 인정하고 전쟁을 끝내자고 한다.`,
       opts:[{t:'강화를 받아들인다',tip:'전쟁 종료, 5년 휴전',go:()=>ENG.makePeace(G,G.player,q.from)},{t:'거절하고 싸운다',tip:'전쟁 계속',go:()=>{}}]}); return; }
+  if(q.kind==='relief'){
+    showModal({glyph:q.type==='화산'?'火':'震',when:fdate(G),title:q.name,who:`${P.name} · ${q.type==='화산'?'VEI '+q.M:'규모 '+q.M.toFixed(1)}`,
+      body:`${q.type==='화산'?'화산재와 화쇄류가 마을을 덮쳤다.':'땅이 갈라지고 집과 성벽이 무너졌다.'} 우리 백성 약 <b>${esc(fpop(q.deaths))}</b>이(가) 목숨을 잃었다. 살아남은 사람들이 조정을 바라보고 있다.`,
+      opts:[{t:'창고를 열고 대대적으로 구호한다',tip:`국고 −${fmoney(P.income*0.25)}, 안정도 +0.4, 생산 +3% (2년, 재건)`,go:()=>ENG.act.relief(G,2)},
+            {t:'최소한의 구호만 한다',tip:`국고 −${fmoney(P.income*0.08)}`,go:()=>ENG.act.relief(G,1)},
+            {t:'스스로 일어서게 둔다',tip:'안정도 −0.6',go:()=>ENG.act.relief(G,0)}]}); return; }
   const ev=q.alt?q.ev.pAlt:q.ev; const opts=q.ask?q.ev.po:ev.o;
   const body=(q.ev.at&&q.ev.px&&!q.alt?`<p style="margin:0 0 10px;color:var(--gold2)">${esc(q.ev.px)}</p>`:'')+esc(ev.x||q.ev.x);
   const wasSpeed=speed;
@@ -2944,7 +3274,10 @@ function showFinal(){
     <div><div class="v">${P.leS.toFixed(1)}세</div><div class="k">기대수명 (실제 세계 ${ENG.interp(D.STATS.worldLE,G.y).toFixed(1)}세)</div></div>
     <div><div class="v">${fpop(wp)}</div><div class="k">세계 인구 (실제 ${fpop(wr)})</div></div>
     <div><div class="v">${P.prov}곳</div><div class="k">영토 (시작 ${first.prov||'—'}곳)</div></div>
-    <div><div class="v">${P.techs.size}/${D.TECH_LIST.length}</div><div class="k">보유 기술</div></div></div>
+    <div><div class="v">${P.techs.size}/${D.TECH_LIST.length}</div><div class="k">보유 기술</div></div>
+    <div><div class="v">${(G.temp||0)>=0?'+':''}${(G.temp||0).toFixed(2)}°C</div><div class="k">세계 기온 (실제 ${ENG.realTemp(G.y)>=0?'+':''}${ENG.realTemp(G.y).toFixed(2)}°C)</div></div>
+    <div><div class="v">${(G.disasters||[]).length}번</div><div class="k">큰 지진·화산 분화</div></div>
+    <div><div class="v">${Object.keys(P.resCnt||{}).length}종</div><div class="k">보유 지하자원</div></div></div>
    <div class="chart" id="chF"></div>
    <h4 class="serif" style="margin:18px 0 6px">연대기에서</h4>
    <ul class="chron">${G.chron.filter(c=>c.g!=='統').slice(-8).reverse().map(c=>`<li><div class="g">${esc(c.g)}</div><div><div class="y">${fy(c.y)}</div><div class="t">${esc(c.t)}</div></div></li>`).join('')}</ul>

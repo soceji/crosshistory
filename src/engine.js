@@ -61,7 +61,15 @@ const PNAME = new Array(N).fill(null);
   }
 })();
 
-ENG.map = {W, H:Hh, N, cellId, PLON, PLAT, PAREA, PTER, PCOAST, ADJ, SEA, PNAME, lon0:M.lon0, lat0:M.lat0, res:M.res, nearestProv, hav};
+// ── 지하자원 배치 (실제 매장지 → 가장 가까운 지방) ──
+const PRES = Array.from({length:N},()=>[]);
+const PRESN = Array.from({length:N},()=>[]);
+for(const [r,lo,la,nm] of D.DEPOSITS){ const p=nearestProv(lo,la,320); if(p>=0){ PRES[p].push(r); PRESN[p].push(nm); } }
+// ── 지진대·화산 ──
+const PSEIS = new Float32Array(N), PSEISZ = new Int16Array(N).fill(-1);
+D.SEISMIC.forEach(([nm,b,rate],k)=>{ let n=0; for(let i=0;i<N;i++) if(inBox(i,b)) n++; for(let i=0;i<N;i++) if(inBox(i,b)){ const v=rate/Math.max(1,n); if(v>PSEIS[i]){ PSEIS[i]=v; PSEISZ[i]=k; } } });
+const VPROV = D.VOLCANOES.map(v=>nearestProv(v[1],v[2],300));
+ENG.map = {W, H:Hh, N, cellId, PLON, PLAT, PAREA, PTER, PCOAST, ADJ, SEA, PNAME, PRES, PRESN, PSEIS, PSEISZ, VPROV, lon0:M.lon0, lat0:M.lat0, res:M.res, nearestProv, hav};
 
 // ── 유틸 ──
 function interp(tab, y){ if(y<=tab[0][0]) return tab[0][1]; for(let i=1;i<tab.length;i++){ if(y<=tab[i][0]){ const [x0,v0]=tab[i-1],[x1,v1]=tab[i]; return v0+(v1-v0)*(y-x0)/(x1-x0); } } return tab[tab.length-1][1]; }
@@ -141,6 +149,10 @@ ENG.newGame = function(eraIdx, playerTag, seed){
   G.kscale = interpLog(D.STATS.worldPop,G.y)*headroom(G.y)/ks;
   for(let p=0;p<N;p++) G.pop[p] = Kprov(G,p)/headroom(G.y);
   G.C.forEach(c=>{ c.inst=clamp(c.inst+[-0.08,0.08,0.3][c.tl],0.35,1.15); c.eff = era.y>=1800 ? [0.33,0.6,1][c.tl] : [0.85,0.95,1][c.tl]; recalc(G,c); c.soldiers = c.pop*0.01*c.armyMul; c.gold = c.income*0.5; autoPolicies(G,c); c.stab=1; recalc(G,c); c._rr=resRate(G,c); });
+  // 기후 초기값 (시작 시점까지는 실제 역사대로 배출했다고 본다)
+  G.cools=[]; G.disasters=[]; G.ce=0; G.ceR=0;
+  for(let y=1850;y<G.y;y++){ const v=interpLog(D.STATS.worldPop,y)*interp(D.STATS.worldGdp,y)*interp(D.CLIMATE.fossil,y); G.ce+=v; G.ceR+=v; }
+  computeTemp(G);
   // 플레이어
   const pc = playerTag ? G.C.find(c=>c.tag===playerTag) : null;
   G.player = pc ? pc.i : G.C[Math.floor(rng(G)*G.C.length)].i;
@@ -165,9 +177,16 @@ function techFactor(G,c){ const k=G.y<1750?0.045:G.y<1900?0.025:0.012; return cl
 function Kprov(G,p){
   const o=G.owner[p]; const real=interpLog(D.STATS.worldPop, G.y);
   let f; if(o<0){ f = G.y< -2000?0.9 : G.y<500?0.45 : G.y<1500?0.35 : G.y<1900?0.25 : 0.4; } else { const c=G.C[o]; f = c._tf!==undefined?c._tf:techFactor(G,c); }
-  return real*pw(p,G.y)/wsum(G.y)*f*headroom(G.y)*(G.kscale||1);
+  return real*pw(p,G.y)/wsum(G.y)*f*headroom(G.y)*(G.kscale||1)*(G._noClim?1:climF(p,G.temp||0));
 }
 
+function climF(p,T){
+  const a=Math.abs(PLAT[p]); let f=1;
+  if(T<0 && a>35) f=1+0.15*T;
+  if(T>1){ if(a<30) f=1-0.06*(T-1); else if(a>50) f=1+0.04*(T-1); }
+  return clamp(f,0.6,1.2);
+}
+ENG.climF=climF;
 function headroom(y){ return interp([[-5000,1.15],[1750,1.15],[1850,1.35],[1920,1.8],[1960,2.4],[2100,2.4]],y); }
 // ── 효과 합산 ──
 const FXKEYS=['tax','prod','mil','def','res','lit','life','stab','colon','naval','demo','manp','tfr','growth'];
@@ -187,10 +206,19 @@ function mods(G,c){
 ENG.mods = mods;
 
 function recalc(G,c){
-  let pop=0,n=0,area=0,coast=0;
-  for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; }
-  c.pop=pop; c.prov=n; c.area=area; c.coast=coast;
+  let pop=0,n=0,area=0,coast=0; const rc={};
+  for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; for(const r of PRES[p]) rc[r]=(rc[r]||0)+1; }
+  c.pop=pop; c.prov=n; c.area=area; c.coast=coast; c.resCnt=rc;
   const s=mods(G,c); c.m=s;
+  // 자원 부족 (우리 땅과 이웃 어디에도 없을 때)
+  const kn=id=>c.techs.has(id);
+  c.short=[];
+  for(const sh of D.SHORT){ if(!kn(sh.need)||(sh.until&&kn(sh.until))) continue; const have=sh.res.some(r=>rc[r]||(c._nbRes&&c._nbRes.has(r))); if(!have){ c.short.push(sh.n); for(const k in sh.fx) s[k]=(s[k]||0)+sh.fx[k]; } }
+  // 자원 수입: 매장지 1곳 = 세계 평균 생산 × (units × 세계인구/78억 × 100만 명)
+  const ws=interpLog(D.STATS.worldPop,G.y)/7.8e9*1e6*900*Math.sqrt(interp(D.STATS.worldGdp,G.y)/900);
+  let ri=0; c.resVal={};
+  for(const r in rc){ const R=D.RES[r]; const on=R.on(kn); if(!on) continue; const v=R.units*on*Math.pow(rc[r],0.85)*ws; c.resVal[r]=v; ri+=v; }
+  c.resIncome=ri;
   c.lit=clamp(s.lit,0,0.99);
   const effn=clamp(((c.eff==null?1:c.eff)-0.2)/0.8,0,1);
   const demo=clamp(s.demo*1.25,0,1)*clamp(0.3+0.7*effn,0,1); c.dev=demo;
@@ -198,9 +226,9 @@ function recalc(G,c){
   const dT=clamp(s.demo*1.25,0,1); const tRich=1.5+4.8*Math.pow(1-dT,1.8), tPoor=1.5+4.8*Math.pow(1-dT*0.55,1.2); let tfr=tPoor+(tRich-tPoor)*Math.pow(effn,0.8); if(['kr','jp','cn'].includes(c.cul)&&demo>0.75) tfr-=0.55; if(c.kr&&G.y>2000) tfr-=0.25; tfr+=s.tfr; c.tfr=clamp(tfr,0.6,7.5);
   if(c.tfrS==null) c.tfrS=c.tfr; if(c.leS==null) c.leS=c.le; if(c.eff==null) c.eff=1;
   c.gdppc = c.fx.gdpBase*Math.max(0.3,1+0.5*s.prod)*(0.85+0.05*c.stab)*c.eff;
-  c.gdp = pop*c.gdppc;
+  c.gdp = pop*c.gdppc + c.resIncome*(0.85+0.05*c.stab);
   c.income = c.exile?0: c.gdp*0.07*Math.max(0.05,1+s.tax);
-  c.expense = c.exile?0: c.income*0.42 + c.soldiers*c.gdppc*2 + c.policies.length*c.gdp*0.0025 + (c.gold<0?-c.gold*0.08:0);
+  c.expense = c.exile?0: c.income*0.42 + c.soldiers*c.gdppc*(['tribe','chief'].includes(c.gov)?0.7:2) + c.policies.length*c.gdp*0.0025 + (c.gold<0?-c.gold*0.08:0);
   const q = (1+s.mil)*(0.7+0.1*(c.stab+3)/2)*(1+ (c.m.mil>0?0:0));
   c.qual=q; c.str = c.soldiers*q*(1+0.15*c.techs.size/40);
   c.slots = D.GOVS[c.gov].slots;
@@ -234,6 +262,7 @@ function techCost(G,c,id){
   let know=0,alive=0; for(const o of G.C){ if(!o.alive) continue; alive++; if(o.techs.has(id)) know++; }
   m*=1-0.55*(know/Math.max(1,alive));
   if(c._nbKnow && c._nbKnow.has(id)) m*=0.75;
+  const tr=D.TECH_RES[id]; if(tr&&c.resCnt){ if(tr.every(r=>c.resCnt[r])) m*=0.8; else if(!tr.some(r=>c.resCnt[r]||(c._nbRes&&c._nbRes.has(r)))) m*=1.15; }
   return m;
 }
 ENG.techCost=techCost;
@@ -288,7 +317,7 @@ ENG.chron=chron; ENG.news=news;
 function recordHist(G){
   let wp=0; for(let p=0;p<N;p++) wp+=G.pop[p];
   const P=G.C[G.player];
-  G.hist.push({y:G.y, wp, wr:interpLog(D.STATS.worldPop,G.y), pp:P.pop, gdp:P.gdppc, le:P.leS, lit:P.lit, tfr:P.tfrS, prov:P.prov, tag:P.tag});
+  G.hist.push({y:G.y, wp, wr:interpLog(D.STATS.worldPop,G.y), pp:P.pop, gdp:P.gdppc, le:P.leS, lit:P.lit, tfr:P.tfrS, prov:P.prov, tag:P.tag, tp:G.temp||0, tr:realTemp(G.y)});
   if(G.hist.length>2500) G.hist.splice(0, G.hist.length-2500);
 }
 
@@ -312,6 +341,63 @@ function checkDeaths(G){
       else news(G,`${c.name} 멸망`,'亡'); } }
 }
 
+// ── 기후·재해 ──
+function realTemp(y){ return interp(D.CLIMATE.temp,y); }
+ENG.realTemp=realTemp;
+function coolSum(G){ let s=0; for(const c of (G.cools||[])) if(c.until>G.day) s+=c.dT; return s; }
+function computeTemp(G){
+  let base;
+  if(G.y<1850) base=realTemp(G.y);
+  else { const b0=realTemp(1850); const ratio=G.ceR>0?clamp(G.ce/G.ceR,0,3):1; base=b0+(realTemp(G.y)-b0)*ratio; }
+  G.tempBase=base; G.temp=base+coolSum(G);
+}
+ENG.computeTemp=computeTemp;
+function yearlyEmissions(G){
+  if(G.y<1850) return;
+  const realWorld=interpLog(D.STATS.worldPop,G.y)*interp(D.STATS.worldGdp,G.y);
+  let tot=0,fos=0; for(const c of G.C){ if(!c.alive) continue; tot+=c.gdp; const k=id=>c.techs.has(id); const sh=!k('steam')?0.05:k('carbon')?0.2:k('renew')?0.65:1; fos+=c.gdp*sh; }
+  G.ce=(G.ce||0)+(tot>0?fos/tot:1)*realWorld;
+  G.ceR=(G.ceR||0)+realWorld*interp(D.CLIMATE.fossil,G.y);
+}
+function addCool(G,dT,years,label){ (G.cools=G.cools||[]).push({dT,until:G.day+Math.round(years*365),label}); G.cools=G.cools.filter(c=>c.until>G.day); computeTemp(G); }
+function logDisaster(G,o){ (G.disasters=G.disasters||[]).push(Object.assign({y:G.y,m:G.m},o)); if(G.disasters.length>150) G.disasters.shift(); }
+function quake(G,lon,lat,M,name,share){
+  const p0=nearestProv(lon,lat,400); if(p0<0) return;
+  const r=60*Math.pow(1.8,M-7);
+  let deaths=0; const owners=new Map();
+  for(let p=0;p<N;p++){ const d=pdist(p,p0); if(p!==p0&&d>r) continue;
+    const o=G.owner[p]; const c=o>=0?G.C[o]:null;
+    const resil = c&&c.techs.has('steel')&&c.eff>0.7 ? 0.35 : c&&c.techs.has('masonry')?1:0.7;
+    let k = share!=null ? (p===p0?share:share*0.25*(1-d/r)) : 0.0006*Math.pow(3,M-7)*(p===p0?1:0.25*(1-d/r)) * (G.y<1900?1.5:1);
+    k=clamp(k*resil,0,0.6); const lost=G.pop[p]*k; G.pop[p]-=lost; deaths+=lost;
+    if(o>=0) owners.set(o,(owners.get(o)||0)+lost);
+  }
+  name=name||`${PNAME[p0].replace(/\s.*$/,'')} 지진`;
+  logDisaster(G,{t:'지진',name,M,deaths,p:p0});
+  for(const [o,l] of owners){ const c=G.C[o]; if(l>c.pop*0.002){ c.stab=clamp(c.stab-Math.min(1,l/c.pop*30),-3,3); c.tmods.push({k:'prod',v:-Math.min(0.15,l/c.pop*5),until:G.day+365,label:name}); } }
+  if(deaths>2000||owners.has(G.player)) news(G,`${name} (규모 ${M.toFixed(1)}) — 사망 약 ${fmtPop(deaths)}`,'震');
+  if(owners.has(G.player)&&owners.get(G.player)>50) G.queue.push({kind:'relief',type:'지진',name,deaths:owners.get(G.player),M});
+}
+function erupt(G,vname,vei){
+  const vi=typeof vname==='number'?vname:D.VOLCANOES.findIndex(v=>v[0]===vname); if(vi<0) return; const v=D.VOLCANOES[vi];
+  const p0=VPROV[vi]; const r=40*Math.pow(2,vei-4);
+  let deaths=0; const owners=new Map();
+  if(p0>=0) for(let p=0;p<N;p++){ const d=pdist(p,p0); if(p!==p0&&d>r) continue; const c_=G.owner[p]>=0?G.C[G.owner[p]]:null; const k=clamp(0.002*Math.pow(2,vei-4)*(p===p0?3:(1-d/r))*(c_&&c_.techs.has('radio')?0.4:1),0,0.5); const lost=G.pop[p]*k; G.pop[p]-=lost; deaths+=lost; const o=G.owner[p]; if(o>=0) owners.set(o,(owners.get(o)||0)+lost); }
+  const cool={5:[-0.08,1],6:[-0.35,2],7:[-0.8,3],8:[-2,6]}[vei];
+  if(cool){ addCool(G,cool[0],cool[1],`${v[0]} 분화`); if(cool[0]<=-0.35) ENG.api(G).plague([-180,35,180,72],0.015*Math.abs(cool[0])/0.35); }
+  logDisaster(G,{t:'화산',name:`${v[0]} 분화`,M:vei,deaths,p:p0});
+  for(const [o,l] of owners){ const c=G.C[o]; c.stab=clamp(c.stab-Math.min(1,l/Math.max(1,c.pop)*20),-3,3); }
+  if(vei>=6||owners.has(G.player)) news(G,`${v[0]} 분화 (VEI ${vei})${cool&&cool[0]<-0.2?` — 세계 기온 ${cool[0]}°C`:''}`,'火');
+  if(owners.has(G.player)&&owners.get(G.player)>50) G.queue.push({kind:'relief',type:'화산',name:`${v[0]} 분화`,deaths:owners.get(G.player),M:vei});
+}
+ENG.quake=quake; ENG.erupt=erupt;
+function natureMonth(G){
+  // 지진대
+  D.SEISMIC.forEach(([nm,b,rate],k)=>{ if(rng(G)<rate/12){ const ps=[]; for(let p=0;p<N;p++) if(PSEISZ[p]===k) ps.push(p); if(!ps.length) return; const p=ps[Math.floor(rng(G)*ps.length)];
+    const M = nm.startsWith('한반도') ? 5+rng(G)*1.6 : Math.min(9.3,7-Math.log(1-rng(G))*0.45); quake(G,PLON[p],PLAT[p],M,null); } });
+  // 화산
+  D.VOLCANOES.forEach((v,i)=>{ if(rng(G)<v[4]/12){ const r=rng(G); let vei=r<.7?4:r<.94?5:r<.99?6:r<.999?7:8; vei=Math.min(vei,v[3]); erupt(G,i,vei); } });
+}
 // ── 엔진 API (사건 스크립트용) ──
 function api(G){
   const E = {
@@ -376,7 +462,11 @@ function api(G){
       b.alive=false; G.wars=G.wars.filter(w=>w.a!==b.i&&w.b!==b.i); },
     exile:(t,to)=>{ const c=C(G,t),d=C(G,to); if(!c) return; for(let p=0;p<N;p++) if(G.owner[p]===c.i) setOwner(G,p,d?d.i:-1); c.exile=true; c.gov='exile'; c.soldiers=c.soldiers*0.05; G.wars=G.wars.filter(w=>w.a!==c.i&&w.b!==c.i);
       if(c.i===G.player) chron(G,'나라를 잃다',`${c.name}의 영토가 모두 ${d?d.name:'적'}에게 넘어갔다. 독립운동의 길이 시작된다.`,'亡'); },
-    div:n=>{ G.div=clamp(G.div+n,0,100); }
+    div:n=>{ G.div=clamp(G.div+n,0,100); },
+    krPre:()=>{ for(const t of ['GOJOSEON','KR_NEO']) if(has(G,t)) return t; return null; },
+    quake:(lo,la,M,name,share)=>quake(G,lo,la,M,name,share),
+    erupt:(v,vei)=>erupt(G,v,vei),
+    cool:(dT,yrs,label)=>addCool(G,dT,yrs,label)
   };
   return E;
 }
@@ -598,7 +688,7 @@ function figMonth(G){
 }
 
 // ── 사건 처리 ──
-function resolveTag(G,E,t){ if(t==='*KOREA') return E.krTag(); return t; }
+function resolveTag(G,E,t){ if(t==='*KOREA') return E.krTag(); if(t==='*KRPRE') return E.krPre(); return t; }
 function evSubject(G,E,ev){
   if(ev.at){ const p=nearestProv(ev.at[0],ev.at[1],300); return p>=0&&G.owner[p]>=0?G.C[G.owner[p]].tag:null; }
   return ev.tag?resolveTag(G,E,ev.tag):null;
@@ -628,7 +718,7 @@ function processEvent(G,E,ev){
   }
   // AI 또는 세계 사건: 역사적 선택 자동 적용
   if(ev.tag && !ev.at && !ev.tag.startsWith('*') && !has(G,ev.tag)) return;
-  if(ev.tag==='*KOREA' && !subj) return;
+  if(ev.tag && ev.tag.startsWith('*') && !subj) return;
   const opt = ev.o.find(o=>o.h)||ev.o[0];
   applyOption(G,E,ev,opt,subj,false);
   runAfter(G,E,ev);
@@ -639,7 +729,8 @@ function processEvent(G,E,ev){
 
 function randomEvent(G,E){
   const P=G.C[G.player]; if(!P.alive||P.exile) return;
-  const pool=D.RANDOM.filter(r=>(!r.minY||G.y>=r.minY)&&(!r.maxY||G.y<=r.maxY)&&(!r.c||(()=>{try{return r.c(E);}catch(e){return false;}})()));
+  const src = (P.techs.has('writing') && !['tribe','chief'].includes(P.gov)) ? D.RANDOM : D.RANDOM_PRE;
+  const pool=src.filter(r=>(!r.minY||G.y>=r.minY)&&(!r.maxY||G.y<=r.maxY)&&(!r.c||(()=>{try{return r.c(E);}catch(e){return false;}})()));
   if(!pool.length) return;
   let tot=pool.reduce((a,r)=>a+r.w,0), x=rng(G)*tot; let pick=pool[0];
   for(const r of pool){ x-=r.w; if(x<=0){pick=r;break;} }
@@ -678,6 +769,8 @@ ENG.tick = function(G){
 
 function monthly(G,E){
   const yr=G.y;
+  computeTemp(G);
+  natureMonth(G);
   // 이웃의 지식 (기술 확산)
   for(const c of G.C){ if(!c.alive) continue; recalc(G,c); }
   // 인구
@@ -716,7 +809,7 @@ function monthly(G,E){
     if(c.i!==G.player && c.stab<-1.8 && c.prov>6 && rng(G)<0.01){ rebel(G,c); }
   }
   // 이웃 지식 캐시 (분기마다)
-  if(G.m%3===0){ for(const c of G.C){ if(!c.alive) continue; const s=new Set(); for(const n of neighbors(G,c)) for(const id of G.C[n].techs) s.add(id); c._nbKnow=s; } }
+  if(G.m%3===0){ for(const c of G.C){ if(!c.alive) continue; const s=new Set(), rs=new Set(); for(const n of neighbors(G,c)){ for(const id of G.C[n].techs) s.add(id); for(const r in (G.C[n].resCnt||{})) rs.add(r); } c._nbKnow=s; c._nbRes=rs; } }
   // 플레이어 군주
   const P=G.C[G.player];
   if(P.alive){
@@ -745,14 +838,16 @@ function rebel(G,c){
 }
 function renormK(G){
   // 세계 부양력 총합 = 실제 인구 × 여유 × (세계 평균 기술 계수)
-  const save=G.kscale; G.kscale=1; let ks=0, tfw=0, pw_=0;
+  const save=G.kscale; G.kscale=1; G._noClim=true; let ks=0, tfw=0, pw_=0;
   for(let p=0;p<N;p++){ ks+=Kprov(G,p); const o=G.owner[p]; if(o>=0){ const c=G.C[o]; tfw+=G.pop[p]*(c._tf||1); pw_+=G.pop[p]; } }
   const avgTF = pw_>0? clamp(tfw/pw_,0.5,2.5):1;
+  G._noClim=false;
   G.kscale = interpLog(D.STATS.worldPop,G.y)*headroom(G.y)*avgTF/ks;
   if(!isFinite(G.kscale)) G.kscale=save;
 }
 ENG.renormK=renormK;
 function yearly(G,E){
+  yearlyEmissions(G);
   renormK(G);
   recordHist(G);
   const P=G.C[G.player];
@@ -780,6 +875,8 @@ ENG.act = {
   target(G,p){ const o=G.owner[p]; const w=findWar(G,G.player,o); if(!w) return false; const side = w.a===G.player?0:1; if(!frontTargets(G,G.player,o).includes(p)) return false; if(side){ w.tb=p; w.pb=0; } else { w.ta=p; w.pa=0; } return true; },
   offerPeace(G,ti){ const P=G.C[G.player]; if(P.lastPeaceAsk>G.day-180) return 'wait'; P.lastPeaceAsk=G.day; if(ENG.playerPeaceAccept(G,ti)){ makePeace(G,G.player,ti); return 'ok'; } return 'no'; },
   develop(G,p){ const P=G.C[G.player]; if(G.owner[p]!==G.player) return false; const cost=P.income*0.1; if(P.gold<cost) return false; P.gold-=cost; G.pop[p]*=1.04; return true; },
+  relief(G,level,lost){ const P=G.C[G.player]; if(level===2){ P.gold-=P.income*0.25; P.stab=clamp(P.stab+0.4,-3,3); P.tmods.push({k:'prod',v:0.03,until:G.day+365*2,label:'재건'}); }
+    else if(level===1){ P.gold-=P.income*0.08; } else { P.stab=clamp(P.stab-0.6,-3,3); } },
   switchTo(G,ci){ G.player=ci; const c=G.C[ci]; c.ruler=null; ensureRuler(G,c,true); c.mob=c.mob||0.012; G.gameOver=null; G.over=false; chron(G,`${c.name}으로 이어가다`,`새로운 나라의 역사를 이끈다.`,'史'); }
 };
 

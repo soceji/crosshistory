@@ -68,7 +68,10 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .mapctl button.on{color:var(--gold2);border-color:var(--gold)}
 .zoomctl{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:4px;z-index:2}
 .zoomctl button{width:30px;height:30px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:5px;font-size:16px}
-.legend{position:absolute;left:12px;bottom:12px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--fg2);z-index:2;max-width:260px}
+.legend{position:absolute;right:12px;bottom:12px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--fg2);z-index:2;max-width:260px}
+.res-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0}
+.res-row .g{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:11px;color:#0d1318;flex:none}
+.res-row .g.off{background:#283036!important;border:1px solid currentColor}
 .legend .ramp{height:8px;border-radius:2px;margin:4px 0 2px;width:180px}
 .legend .ends{display:flex;justify-content:space-between;width:180px;font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
 
@@ -341,5 +344,6 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
 <script src="map.js"></script>
 <script src="data.js"></script>
 <script src="events.js"></script>
+<script src="nature.js"></script>
 <script src="engine.js"></script>
 <script src="ui.js"></script>
