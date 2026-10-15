@@ -130,7 +130,7 @@ function claimMulti(G, srcs, allow, maxSea){
 ENG.newGame = function(eraIdx, playerTag, seed){
   const era = D.ERAS[eraIdx];
   const G = { v:1, era:eraIdx, y:era.y, m:era.m, d:era.d, day:0, seed:seed||((Math.random()*1e9)|0),
-    owner:new Int16Array(N).fill(-1), pop:new Float64Array(N), C:[], tag:{}, player:-1, div:0, evPtr:0, fired:{}, figs:{},
+    owner:new Int16Array(N).fill(-1), pop:new Float64Array(N), C:[], tag:{}, player:-1, armies:[], nextArmy:1, battles:[], sieges:{}, autoBattle:false, div:0, evPtr:0, fired:{}, figs:{},
     wars:[], ops:[], news:[], chron:[], hist:[], ownVer:1, queue:[], over:false, gameOver:null, stats:{conquered:0,colonized:0,wars:0,choicesH:0,choicesA:0},
     startY:era.y };
   // 국가 생성 + 영토
@@ -153,6 +153,8 @@ ENG.newGame = function(eraIdx, playerTag, seed){
   G.cools=[]; G.disasters=[]; G.ce=0; G.ceR=0;
   for(let y=1850;y<G.y;y++){ const v=interpLog(D.STATS.worldPop,y)*interp(D.STATS.worldGdp,y)*interp(D.CLIMATE.fossil,y); G.ce+=v; G.ceR+=v; }
   computeTemp(G);
+  initRoads(G);
+  for(const c of G.C) resetArmies(G,c);
   // 플레이어
   const pc = playerTag ? G.C.find(c=>c.tag===playerTag) : null;
   G.player = pc ? pc.i : G.C[Math.floor(rng(G)*G.C.length)].i;
@@ -207,9 +209,9 @@ ENG.mods = mods;
 
 function recalc(G,c){
   let pop=0,n=0,area=0,coast=0; const rc={};
-  for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; for(const r of PRES[p]) rc[r]=(rc[r]||0)+1; }
-  c.pop=pop; c.prov=n; c.area=area; c.coast=coast; c.resCnt=rc;
-  const s=mods(G,c); c.m=s;
+  let rw=0; for(let p=0;p<N;p++) if(G.owner[p]===c.i){ pop+=G.pop[p]; n++; area+=PAREA[p]; if(PCOAST[p]) coast++; for(const r of PRES[p]) rc[r]=(rc[r]||0)+1; if(G.road) rw+=G.pop[p]*G.road[p]; }
+  c.pop=pop; c.prov=n; c.area=area; c.coast=coast; c.resCnt=rc; c.roadAvg=pop>0?rw/pop:0;
+  const s=mods(G,c); c.m=s; s.prod+=0.015*c.roadAvg; s.tax+=0.01*c.roadAvg;
   // 자원 부족 (우리 땅과 이웃 어디에도 없을 때)
   const kn=id=>c.techs.has(id);
   c.short=[];
@@ -336,7 +338,7 @@ function fixCapitals(G){
 function checkDeaths(G){
   const cnt=new Int32Array(G.C.length); for(let p=0;p<N;p++) if(G.owner[p]>=0) cnt[G.owner[p]]++;
   for(const c of G.C){ if(!c.alive) continue; c.prov=cnt[c.i];
-    if(cnt[c.i]===0 && !c.exile){ c.alive=false; G.wars=G.wars.filter(w=>w.a!==c.i&&w.b!==c.i);
+    if(cnt[c.i]===0 && !c.exile){ c.alive=false; G.wars=G.wars.filter(w=>w.a!==c.i&&w.b!==c.i); if(G.armies) G.armies=G.armies.filter(a=>a.o!==c.i); if(G.battles) G.battles=G.battles.filter(b=>b.ao!==c.i&&b.do!==c.i);
       if(c.i===G.player){ G.gameOver={reason:'fall', y:G.y}; }
       else news(G,`${c.name} 멸망`,'亡'); } }
 }
@@ -394,7 +396,7 @@ ENG.quake=quake; ENG.erupt=erupt;
 function natureMonth(G){
   // 지진대
   D.SEISMIC.forEach(([nm,b,rate],k)=>{ if(rng(G)<rate/12){ const ps=[]; for(let p=0;p<N;p++) if(PSEISZ[p]===k) ps.push(p); if(!ps.length) return; const p=ps[Math.floor(rng(G)*ps.length)];
-    const M = nm.startsWith('한반도') ? 5+rng(G)*1.6 : Math.min(9.3,7-Math.log(1-rng(G))*0.45); quake(G,PLON[p],PLAT[p],M,null); } });
+    const sub=['일본 해구','순다·필리핀 해구','안데스','알래스카·알류샨','캄차카','멕시코·중앙아메리카'].includes(nm); const M = nm.startsWith('한반도') ? 5+rng(G)*1.6 : Math.min(sub?9.3:8.2,7-Math.log(1-rng(G))*(sub?0.45:0.3)); quake(G,PLON[p],PLAT[p],M,null); } });
   // 화산
   D.VOLCANOES.forEach((v,i)=>{ if(rng(G)<v[4]/12){ const r=rng(G); let vei=r<.7?4:r<.94?5:r<.99?6:r<.999?7:8; vei=Math.min(vei,v[3]); erupt(G,i,vei); } });
 }
@@ -425,7 +427,7 @@ function api(G){
     mod:(t,o)=>{ const c=C(G,t); if(!c||!c.alive) return; recalc(G,c);
       if(o.gold) c.gold+=o.gold*Math.max(c.income, c.gdp*0.02);
       if(o.stab) c.stab=clamp(c.stab+o.stab,-3,3);
-      if(o.army) c.soldiers=Math.max(0,c.soldiers*(1+o.army));
+      if(o.army) setSoldiers(G,c,c.soldiers*(1+o.army));
       if(o.pop) for(let p=0;p<N;p++) if(G.owner[p]===c.i) G.pop[p]*=Math.max(0,1+o.pop);
       if(o.lit) c.perm.lit+=o.lit; if(o.life) c.perm.life+=o.life; if(o.def) c.perm.def+=o.def;
       if(o.res){ if(!c.cur) c.cur=pickTech(G,c); if(c.cur) c.prog+=o.res*techCost(G,c,c.cur); }
@@ -459,8 +461,8 @@ function api(G){
     annexTo:(into,from)=>{ const a=C(G,into),b=C(G,from); if(!a||!b||!a.alive||!b.alive) return; for(let p=0;p<N;p++) if(G.owner[p]===b.i) setOwner(G,p,a.i);
       for(const id of b.techs) a.techs.add(id); a.techDirty=true;
       if(G.player===b.i){ G.player=a.i; a.mob=b.mob; a.ruler=null; ensureRuler(G,a); chron(G,`${a.name}의 일원이 되다`,`${b.name}은(는) ${a.name}에 합쳐졌다. 이제 ${a.name}을(를) 이끈다.`,'合'); }
-      b.alive=false; G.wars=G.wars.filter(w=>w.a!==b.i&&w.b!==b.i); },
-    exile:(t,to)=>{ const c=C(G,t),d=C(G,to); if(!c) return; for(let p=0;p<N;p++) if(G.owner[p]===c.i) setOwner(G,p,d?d.i:-1); c.exile=true; c.gov='exile'; c.soldiers=c.soldiers*0.05; G.wars=G.wars.filter(w=>w.a!==c.i&&w.b!==c.i);
+      G.armies=G.armies.filter(x=>x.o!==b.i); b.alive=false; G.wars=G.wars.filter(w=>w.a!==b.i&&w.b!==b.i); },
+    exile:(t,to)=>{ const c=C(G,t),d=C(G,to); if(!c) return; for(let p=0;p<N;p++) if(G.owner[p]===c.i) setOwner(G,p,d?d.i:-1); c.exile=true; c.gov='exile'; G.armies=G.armies.filter(a=>a.o!==c.i); c.soldiers=c.soldiers*0.05; G.wars=G.wars.filter(w=>w.a!==c.i&&w.b!==c.i);
       if(c.i===G.player) chron(G,'나라를 잃다',`${c.name}의 영토가 모두 ${d?d.name:'적'}에게 넘어갔다. 독립운동의 길이 시작된다.`,'亡'); },
     div:n=>{ G.div=clamp(G.div+n,0,100); },
     krPre:()=>{ for(const t of ['GOJOSEON','KR_NEO']) if(has(G,t)) return t; return null; },
@@ -495,6 +497,8 @@ function spawn(G,E,tag,name,anchors,opt){
   c.techDirty=true; if(parent){ c.eff=parent.eff*0.9; c.tfrS=parent.tfrS; c.leS=parent.leS; c.inst=clamp(parent.inst+(rng(G)-.6)*0.25,0.35,1.15); }
   recalc(G,c); c.soldiers=c.pop*0.012*(opt.army||1); c.gold=c.income*0.4; c.stab=1; autoPolicies(G,c);
   const p0=nearestProv(anchors[0][0],anchors[0][1],400); c.cap=(p0>=0&&G.owner[p0]===c.i)?p0:res[0][0];
+  resetArmies(G,c);
+  for(let p=0;p<N;p++) if(G.owner[p]===c.i) G.road[p]=Math.min(G.road[p],roadMax(c));
   checkDeaths(G); fixCapitals(G);
   if(losers.has(G.player)) chron(G,`${name}의 독립`,`${name}이(가) 우리 영토 일부에서 일어섰다.`,'裂');
   news(G,`${name} 등장`,'興');
@@ -519,73 +523,310 @@ function neighbors(G,c){
 }
 ENG.neighbors=neighbors;
 
-// ── 전쟁 ──
+// ── 전쟁: 군단 · 전투 · 포위 · 병참 · 도로 ──
 function findWar(G,a,b){ return G.wars.find(w=>(w.a===a&&w.b===b)||(w.a===b&&w.b===a)); }
 ENG.findWar=findWar;
+const atWar=(G,a,b)=>a!==b&&a>=0&&b>=0&&!!findWar(G,a,b);
+ENG.atWarIdx=atWar;
+function enemiesOf(G,ci){ const s=[]; for(const w of G.wars){ if(w.a===ci) s.push(w.b); else if(w.b===ci) s.push(w.a); } return s; }
+ENG.enemiesOf=enemiesOf;
+function stanceOf(G,ci,w){ w=w||G.wars.find(x=>x.a===ci||x.b===ci); if(!w) return 'def'; return (w.a===ci?w.sa:w.sb)||'off'; }
+ENG.stanceOf=stanceOf;
+
+// 전투 지형
+const WT=new Uint8Array(N);
+for(let i=0;i<N;i++){ let t=PTER[i]; for(const b of D.HILLS) if(inBox(i,b)) t=6; for(const b of D.MOUNTAINS) if(inBox(i,b)) t=7; WT[i]=t; }
+ENG.map.WT=WT;
+
+// 도로
+function roadMax(c){ let m=0; D.ROADS.forEach((r,i)=>{ if(!r.req||c.techs.has(r.req)) m=i; }); return m; }
+ENG.roadMax=roadMax;
+const rspd=(G,p)=>D.ROADS[G.road[p]||0].spd;
+function initRoads(G){
+  G.road=new Uint8Array(N);
+  for(const c of G.C){ if(!c.alive) continue; const L=roadMax(c); const ps=[]; for(let p=0;p<N;p++) if(G.owner[p]===c.i) ps.push(p);
+    ps.sort((a,b)=>G.pop[b]/Math.max(200,PAREA[b])-G.pop[a]/Math.max(200,PAREA[a]));
+    ps.forEach((p,k)=>{ const r=k/Math.max(1,ps.length); G.road[p]= p===c.cap?L : r<0.3?Math.max(0,L-1) : Math.max(0,L-2); }); }
+}
+ENG.initRoads=initRoads;
+function roadCost(G,c,p,lv){ return Math.max(c.income*0.02,c.gdp*0.0008)*D.ROADS[lv].cost*(1+PAREA[p]/60000); }
+ENG.roadCost=roadCost;
+function startRoad(G,c,p){
+  if(G.owner[p]!==c.i) return false; const lv=(G.road[p]||0)+1; if(lv>roadMax(c)) return false;
+  if(G.ops.some(o=>o.p===p&&o.type==='road')) return false;
+  const cost=roadCost(G,c,p,lv); if(c.gold<cost) return false;
+  c.gold-=cost; G.ops.push({type:'road',p,by:c.i,lv,prog:0,days:Math.round(D.ROADS[lv].days*(1+PAREA[p]/80000))}); return true;
+}
+ENG.startRoad=startRoad;
+
+// 요새
+function fortLv(G,p){ const o=G.owner[p]; if(o<0) return 0; const c=G.C[o]; let f=0; if(c.techs.has('masonry')) f+=0.5; if(c.techs.has('castle')) f+=1; if(c.policies.includes('fort')) f+=1; if(c.cap===p) f+=1; if(c.techs.has('rifle')) f*=0.6; return f; }
+ENG.fortLv=fortLv;
+
+// 장수 이름
+function genName(G,c){ const r=a=>a[Math.floor(rng(G)*a.length)]; if(c.kr||c.cul==='kr') return r(NAMEPOOL.kr)+r(NAMEPOOL.krGiven)+r(NAMEPOOL.krGiven); if(c.cul==='cn') return r(NAMEPOOL.cn)+r(NAMEPOOL.cnGiven); if(NAMEPOOL[c.cul]) return r(NAMEPOOL[c.cul]); return '장군'; }
+const NUMK=['제1군','제2군','제3군','제4군','제5군','제6군','제7군','제8군','제9군'];
+function newArmy(G,c,p,n,opt){
+  const k=G.armies.filter(a=>a.o===c.i).length;
+  const a=Object.assign({id:G.nextArmy++,o:c.i,p,n,mor:1,gen:{n:genName(G,c),sk:2+Math.floor(rng(G)*3)},path:[],prog:0,auto:true,land:0,sup:1,name:NUMK[k]||`제${k+1}군`,home:false},opt||{});
+  G.armies.push(a); return a;
+}
+function armiesOf(G,ci){ return G.armies.filter(a=>a.o===ci); }
+ENG.armiesOf=armiesOf;
+function syncSoldiers(G,c){ let s=0; for(const a of G.armies) if(a.o===c.i) s+=a.n; c.soldiers=s; }
+function setSoldiers(G,c,v){
+  v=Math.max(0,v); const as=armiesOf(G,c.i); const cur=as.reduce((s,a)=>s+a.n,0);
+  if(c.cap<0||!c.alive){ G.armies=G.armies.filter(a=>a.o!==c.i); c.soldiers=v; return; }
+  if(!as.length){ newArmy(G,c,c.cap,v,{home:true}); c.soldiers=v; return; }
+  if(v>=cur){ let h=as.find(a=>G.owner[a.p]===c.i&&a.home)||as.find(a=>G.owner[a.p]===c.i); if(!h){ h=newArmy(G,c,c.cap,0,{home:true}); } h.n+=v-cur; }
+  else { const k=cur>0?v/cur:0; for(const a of as) a.n*=k; }
+  c.soldiers=v;
+}
+ENG.setSoldiers=setSoldiers;
+function resetArmies(G,c){ const v=c.soldiers; G.armies=G.armies.filter(a=>a.o!==c.i); if(c.alive&&c.cap>=0&&v>0) newArmy(G,c,c.cap,v,{home:true}); }
+ENG.resetArmies=resetArmies;
+
+// 이동 가능 여부: 자국·공터·교전국 땅만 지나간다
+function passable(G,ci,p){ const o=G.owner[p]; return o<0||o===ci||atWar(G,ci,o); }
+function baseSpeed(c){ let s=16; if(c.techs.has('horse')) s*=1.15; if(c.techs.has('combust')) s*=1.4; return s; }
+function seaSpeed(c){ return c.techs.has('steamship')?90:c.techs.has('sail')?45:25; }
+function edgeDays(G,c,p,q,sea){ const d=pdist(p,q); if(sea) return 4+d/seaSpeed(c); const rs=(rspd(G,p)+rspd(G,q))/2; return d/(baseSpeed(c)*rs*D.WTERR[WT[q]].mv); }
+// 경로: [{p, days, sea}]
+function findPath(G,a,dest){
+  const c=G.C[a.o]; const nav=c.m?c.m.naval:0;
+  if(dest===a.p) return [];
+  if(!passable(G,a.o,dest)) return null;
+  const dist=new Float64Array(N).fill(1e12), prev=new Int32Array(N).fill(-1), viaSea=new Uint8Array(N);
+  const heap=[[0,a.p]]; dist[a.p]=0;
+  const push=(d,p)=>{ heap.push([d,p]); let i=heap.length-1; while(i>0){ const pa=(i-1)>>1; if(heap[pa][0]<=heap[i][0]) break; [heap[pa],heap[i]]=[heap[i],heap[pa]]; i=pa; } };
+  const pop=()=>{ const t=heap[0], l=heap.pop(); if(heap.length){ heap[0]=l; let i=0; for(;;){ const L=2*i+1,R=L+1; let m=i; if(L<heap.length&&heap[L][0]<heap[m][0]) m=L; if(R<heap.length&&heap[R][0]<heap[m][0]) m=R; if(m===i) break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return t; };
+  while(heap.length){ const [d,p]=pop(); if(d>dist[p]) continue; if(p===dest) break;
+    const relax=(q,sea)=>{ if(!passable(G,a.o,q)) return; const nd=d+edgeDays(G,c,p,q,sea); if(nd<dist[q]){ dist[q]=nd; prev[q]=p; viaSea[q]=sea?1:0; push(nd,q); } };
+    for(const q of ADJ[p]) relax(q,false);
+    if(nav>=1) for(const q of SEA[p]) relax(q,true);
+  }
+  if(prev[dest]<0){
+    // 원양 수송: 항해 기술이 있으면 해안에서 해안으로 직접
+    if(nav>=3&&PCOAST[dest]&&PCOAST[a.p]) return [{p:dest,days:4+pdist(a.p,dest)/seaSpeed(c),sea:true}];
+    return null;
+  }
+  const out=[]; let q=dest; while(q!==a.p){ const p=prev[q]; out.unshift({p:q,days:edgeDays(G,c,p,q,viaSea[q]),sea:!!viaSea[q]}); q=p; }
+  return out;
+}
+ENG.findPath=findPath;
+function orderMove(G,a,dest){ const path=findPath(G,a,dest); if(!path) return false; a.path=path; a.prog=0; a.dest=dest; return true; }
+ENG.orderMove=orderMove;
+
+// 병참: 주요 지방(수도+인구 상위 5곳)에서 도로망을 따라 거리를 잰다
+function supplyRange(c){ const k=id=>c.techs.has(id); return 260+(k('roads')?120:0)+(k('bureau')?80:0)+(k('rail')?500:0)+(k('combust')?400:0)+(k('flight')?250:0); }
+function computeSupply(G,c){
+  const sup=new Float32Array(N); const dist=new Float64Array(N).fill(1e12);
+  const srcs=[]; for(let p=0;p<N;p++) if(G.owner[p]===c.i) srcs.push(p);
+  if(!srcs.length){ c._sup=sup; return; }
+  srcs.sort((a,b)=>G.pop[b]-G.pop[a]); const major=new Set(srcs.slice(0,5)); if(c.cap>=0) major.add(c.cap);
+  const heap=[]; const push=(d,p)=>{ heap.push([d,p]); let i=heap.length-1; while(i>0){ const pa=(i-1)>>1; if(heap[pa][0]<=heap[i][0]) break; [heap[pa],heap[i]]=[heap[i],heap[pa]]; i=pa; } };
+  const pop=()=>{ const t=heap[0], l=heap.pop(); if(heap.length){ heap[0]=l; let i=0; for(;;){ const L=2*i+1,R=L+1; let m=i; if(L<heap.length&&heap[L][0]<heap[m][0]) m=L; if(R<heap.length&&heap[R][0]<heap[m][0]) m=R; if(m===i) break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return t; };
+  for(const p of major){ dist[p]=0; push(0,p); }
+  const nav=c.m?c.m.naval:0; const seaMul=c.techs.has('steamship')?1.6:3.2;
+  while(heap.length){ const [d,p]=pop(); if(d>dist[p]) continue;
+    const step=(q,sea)=>{ const o=G.owner[q]; const hostile=o>=0&&o!==c.i; const km=pdist(p,q)*(sea?seaMul:1)/(sea?1:(rspd(G,p)+rspd(G,q))/2)/(sea?1:D.WTERR[WT[q]].mv)*(hostile?1.4:1); const nd=d+km; if(nd<dist[q]){ dist[q]=nd; push(nd,q); } };
+    for(const q of ADJ[p]) step(q,false); if(nav>=1) for(const q of SEA[p]) step(q,true); }
+  const R=supplyRange(c);
+  for(let p=0;p<N;p++){ let v=clamp(1-dist[p]/R,0.08,1); if(G.owner[p]===c.i) v=Math.max(v,0.7); sup[p]=v; }
+  c._sup=sup;
+}
+ENG.computeSupply=computeSupply;
+
+// 전쟁 선포·강화
 function declareWar(G,a,b,boost){
   if(a===b||findWar(G,a,b)) return;
   const A=G.C[a],B=G.C[b]; if(!A.alive||!B.alive||A.exile||B.exile) return;
-  const w={a,b,since:G.day,score:0,ta:-1,tb:-1,pa:0,pb:0,ex:0};
+  const w={a,b,since:G.day,score:0,sa:'off',sb:'def'};
   G.wars.push(w);
   if(boost&&boost>1) A.tmods.push({k:'mil',v:boost-1,until:G.day+365*4,label:'원정군'});
-  if(a===G.player||b===G.player){ G.stats.wars++; chron(G,`${A.name} ↔ ${B.name} 전쟁`,`${A.name}이(가) ${B.name}에 선전포고했다.`,'戰'); }
+  for(const ci of [a,b]){ const c=G.C[ci]; if(ci!==G.player) w[ci===a?'sa':'sb']= c.str*1.0 >= G.C[ci===a?b:a].str*0.8 ? 'off':'def'; prepArmies(G,c); computeSupply(G,c); }
+  if(a===G.player||b===G.player){ G.stats.wars++; chron(G,`${A.name} ↔ ${B.name} 전쟁`,`${A.name}이(가) ${B.name}에 선전포고했다.`,'戰'); G.queue.push({kind:'stance',war:w}); }
   news(G,`${A.name}, ${B.name}에 선전포고`,'戰');
+}
+// 전쟁 대비: 군단이 하나뿐이면 수비군과 원정군으로 나눈다
+function prepArmies(G,c){
+  const as=armiesOf(G,c.i); if(!as.length){ if(c.cap>=0&&c.soldiers>0) newArmy(G,c,c.cap,c.soldiers,{home:true}); return; }
+  if(as.length===1&&as[0].n>3000){ const h=as[0]; h.home=true; const k=c.i===G.player?0.5:0.6; const f=newArmy(G,c,h.p,h.n*k); h.n-=f.n; }
 }
 function makePeace(G,a,b,silent){
   const w=findWar(G,a,b); if(!w) return;
   G.wars=G.wars.filter(x=>x!==w);
   G.C[a].truce[b]=G.day+365*5; G.C[b].truce[a]=G.day+365*5;
+  // 상대 땅에 남은 군단은 귀국
+  for(const ar of G.armies){ const o=G.owner[ar.p]; if((ar.o===a&&o===b)||(ar.o===b&&o===a)) sendHome(G,ar,true); }
+  for(const k in G.sieges){ const s=G.sieges[k]; if((s.o===a&&G.owner[k]===b)||(s.o===b&&G.owner[k]===a)) delete G.sieges[k]; }
   if(a===G.player||b===G.player) chron(G,`${G.C[a].name}·${G.C[b].name} 강화`,`전쟁이 끝났다.`,'和');
   news(G,`${G.C[a].name}·${G.C[b].name} 강화`,'和');
 }
 ENG.declareWar=declareWar; ENG.makePeace=makePeace;
-function frontTargets(G,att,def){
-  const A=G.C[att]; const nav=A.m?A.m.naval:0; const out=new Set();
-  let coastOwn=false;
-  for(let p=0;p<N;p++) if(G.owner[p]===att){ if(PCOAST[p]) coastOwn=true; for(const q of ADJ[p]) if(G.owner[q]===def) out.add(q); if(nav>=1) for(const q of SEA[p]) if(G.owner[q]===def) out.add(q); }
-  if(!out.size && nav>=3 && coastOwn){ for(let p=0;p<N;p++) if(G.owner[p]===def&&PCOAST[p]) out.add(p); }
-  return [...out];
+function nearestOwn(G,ci,p){ let b=-1,bd=1e9; for(let q=0;q<N;q++) if(G.owner[q]===ci){ const d=pdist(p,q); if(d<bd){ bd=d; b=q; } } return b; }
+function sendHome(G,a,teleport){ const q=nearestOwn(G,a.o,a.p); if(q<0){ a.n=0; return; } if(teleport){ a.p=q; a.path=[]; a.prog=0; } else if(!orderMove(G,a,q)){ a.p=q; a.path=[]; } }
+
+// 전투
+function armyPow(G,a,side,b){
+  const c=G.C[a.o]; const p=b.p; const t=D.WTERR[WT[p]];
+  let f=a.n*(1+Math.max(-0.5,c.m.mil))*(0.35+0.65*a.mor)*(0.4+0.6*a.sup)*(1+0.07*(a.gen.sk-3));
+  if(side==='att'){ f*=t.atk; if(a.land>G.day) f*=0.35; if(stanceOf(G,a.o)==='off') f*=1.1; }
+  else { f*=t.def*(1+0.12*fortLv(G,p)*(G.owner[p]===a.o?1:0)); if(G.owner[p]===a.o&&stanceOf(G,a.o)==='def') f*=1.2; }
+  return f;
 }
-ENG.frontTargets=frontTargets;
-function pickTarget(G,att,def){
-  const f=frontTargets(G,att,def); if(!f.length) return -1;
-  const A=G.C[att]; const ref=A.cap>=0?A.cap:f[0];
-  f.sort((x,y)=>pdist(x,ref)-pdist(y,ref));
-  return f[Math.floor(rng(G)*Math.min(3,f.length))];
+function tacticMul(b,side){ const t=side==='att'?b.tA:b.tD; return t?t.mul:1; }
+function startBattles(G){
+  const byProv=new Map(); for(const a of G.armies){ if(a.n<1||a.ret>G.day) continue; if(!byProv.has(a.p)) byProv.set(a.p,[]); byProv.get(a.p).push(a); }
+  for(const [p,as] of byProv){
+    if(as.length<2||G.battles.some(b=>b.p===p)) continue;
+    const owners=[...new Set(as.map(a=>a.o))]; let pair=null;
+    for(let i=0;i<owners.length&&!pair;i++) for(let j=i+1;j<owners.length;j++) if(atWar(G,owners[i],owners[j])){ pair=[owners[i],owners[j]]; break; }
+    if(!pair) continue;
+    let [x,y]=pair; let def = G.owner[p]===x?x:G.owner[p]===y?y:null;
+    if(def===null){ const ax=Math.min(...as.filter(a=>a.o===x).map(a=>a.arr||0)), ay=Math.min(...as.filter(a=>a.o===y).map(a=>a.arr||0)); def= ax<=ay?x:y; }
+    const att= def===x?y:x;
+    const b={id:G.nextArmy++,p,ao:att,do:def,att:as.filter(a=>a.o===att).map(a=>a.id),def:as.filter(a=>a.o===def).map(a=>a.id),day:0,tA:null,tD:null,
+      n0A:as.filter(a=>a.o===att).reduce((s,a)=>s+a.n,0), n0D:as.filter(a=>a.o===def).reduce((s,a)=>s+a.n,0), lossA:0, lossD:0};
+    G.battles.push(b);
+    for(const a of as) if(a.o===att||a.o===def){ a.path=[]; a.prog=0; }
+    delete G.sieges[p];
+    if((att===G.player||def===G.player) && !G.autoBattle){ const mine=att===G.player?b.n0A:b.n0D; if(mine>=Math.max(2000,G.C[G.player].soldiers*0.15)) G.queue.push({kind:'battle',id:b.id}); }
+  }
+}
+function battleDay(G){
+  for(const b of [...G.battles]){
+    const A=b.att.map(id=>G.armies.find(a=>a.id===id)).filter(a=>a&&a.n>0&&a.p===b.p&&!(a.ret>G.day));
+    const Dd=b.def.map(id=>G.armies.find(a=>a.id===id)).filter(a=>a&&a.n>0&&a.p===b.p&&!(a.ret>G.day));
+    // 같은 지방에 새로 도착한 아군 합류
+    for(const a of G.armies){ if(a.p!==b.p||a.n<=0||a.ret>G.day) continue; if(a.o===b.ao&&!b.att.includes(a.id)){ b.att.push(a.id); A.push(a); a.path=[]; } if(a.o===b.do&&!b.def.includes(a.id)){ b.def.push(a.id); Dd.push(a); a.path=[]; } }
+    if(!A.length||!Dd.length||!atWar(G,b.ao,b.do)){ endBattle(G,b,A.length?'att':'def',A,Dd); continue; }
+    b.day++;
+    let pA=A.reduce((s,a)=>s+armyPow(G,a,'att',b),0)*tacticMul(b,'att'), pD=Dd.reduce((s,a)=>s+armyPow(G,a,'def',b),0)*tacticMul(b,'def');
+    const nA=A.reduce((s,a)=>s+a.n,0), nD=Dd.reduce((s,a)=>s+a.n,0);
+    const rA=Math.pow(pD/Math.max(1,pA),0.8), rD=Math.pow(pA/Math.max(1,pD),0.8);
+    const lfA=clamp(0.016*rA,0.002,0.09)*(b.tA?b.tA.loss:1), lfD=clamp(0.016*rD,0.002,0.09)*(b.tD?b.tD.loss:1);
+    for(const a of A){ const l=a.n*lfA; a.n-=l; b.lossA+=l; a.mor=clamp(a.mor-0.045*rA,0,1); }
+    for(const a of Dd){ const l=a.n*lfD; a.n-=l; b.lossD+=l; a.mor=clamp(a.mor-0.045*rD,0,1); }
+    const mA=A.reduce((s,a)=>s+a.mor*a.n,0)/Math.max(1,A.reduce((s,a)=>s+a.n,0)), mD=Dd.reduce((s,a)=>s+a.mor*a.n,0)/Math.max(1,Dd.reduce((s,a)=>s+a.n,0));
+    if(mA<0.22||nA<b.n0A*0.05||b.day>40&&mA<mD) endBattle(G,b,'def',A,Dd);
+    else if(mD<0.22||nD<b.n0D*0.05||b.day>40) endBattle(G,b,'att',A,Dd);
+  }
+  for(const c of G.C) if(c.alive) syncSoldiers(G,c);
+  G.armies=G.armies.filter(a=>a.n>=1);
+}
+function endBattle(G,b,winner,A,Dd){
+  G.battles=G.battles.filter(x=>x!==b);
+  const losers= winner==='att'?Dd:A, wo= winner==='att'?b.ao:b.do, lo= winner==='att'?b.do:b.ao;
+  for(const a of losers){ a.mor=Math.min(a.mor,0.2); a.ret=G.day+20;
+    let q=-1,bd=1e9; for(let x=0;x<N;x++) if(G.owner[x]===a.o&&x!==b.p&&!G.battles.some(bb=>bb.p===x)){ const d=pdist(x,b.p); if(d<bd){ bd=d; q=x; } }
+    if(q<0){ a.n=0; continue; }               // 퇴각할 곳이 없으면 궤멸
+    if(!orderMove(G,a,q)){ a.n*=0.5; a.p=q; a.path=[]; } }
+  const w=findWar(G,b.ao,b.do); const big=b.lossA+b.lossD>Math.max(800,(b.n0A+b.n0D)*0.05);
+  if(w&&big){ w.score+= (wo===w.a?1:-1); }
+  const rec={y:G.y,m:G.m,p:b.p,ao:b.ao,do:b.do,win:wo,lossA:Math.round(b.lossA),lossD:Math.round(b.lossD),n0A:Math.round(b.n0A),n0D:Math.round(b.n0D),days:b.day};
+  (G.battleLog=G.battleLog||[]).push(rec); if(G.battleLog.length>80) G.battleLog.shift();
+  if(b.ao===G.player||b.do===G.player){ const won=wo===G.player; const P=G.C[G.player]; const E=G.C[won?lo:wo];
+    chron(G,`${PNAME[b.p]} 전투 ${won?'승리':'패배'}`,`${b.day}일간의 전투. 아군 손실 ${fmtPop((b.ao===G.player?b.lossA:b.lossD))}, ${E.name} 손실 ${fmtPop((b.ao===G.player?b.lossD:b.lossA))}.`,'戰');
+    news(G,`${PNAME[b.p]} 전투 — ${won?'승리':'패배'}`,'戰'); }
+  else if(big&&b.lossA+b.lossD>20000) news(G,`${PNAME[b.p]} 전투: ${G.C[wo].name} 승리`,'戰');
+}
+ENG.battleTactic=function(G,bid,tid){
+  const b=G.battles.find(x=>x.id===bid); if(!b) return; const T=D.TACTICS.find(t=>t.id===tid); if(!T) return;
+  const side=b.ao===G.player?'att':'def'; const as=(side==='att'?b.att:b.def).map(id=>G.armies.find(a=>a.id===id)).filter(Boolean);
+  let mul=1, loss=T.loss||1, msg='';
+  if(T.fx==='gen'){ const sk=Math.max(...as.map(a=>a.gen.sk),1); mul=1+0.06*(sk-2); }
+  else if(T.gamble){ if(rng(G)<T.gamble){ mul=T.fx; if(T.mor){ const en=(side==='att'?b.def:b.att).map(id=>G.armies.find(a=>a.id===id)).filter(Boolean); en.forEach(a=>a.mor=clamp(a.mor+T.mor,0,1)); } msg='성공'; } else { mul=T.fail||1; if(T.failMor) as.forEach(a=>a.mor=clamp(a.mor+T.failMor,0,1)); msg='실패'; } }
+  else mul=T.fx;
+  const t={id:tid,mul,loss,msg}; if(side==='att') b.tA=t; else b.tD=t;
+  return msg;
+};
+// AI 전술 (플레이어가 아닌 쪽)
+function aiTactic(G,b){ for(const side of ['att','def']){ const o=side==='att'?b.ao:b.do; if(o===G.player&&!G.autoBattle) continue; if(side==='att'?b.tA:b.tD) continue;
+  const as=(side==='att'?b.att:b.def).map(id=>G.armies.find(a=>a.id===id)).filter(Boolean); const sk=as.length?Math.max(...as.map(a=>a.gen.sk)):3;
+  const t={id:'ai',mul:1+0.05*(sk-3)+(rng(G)-0.5)*0.15,loss:1}; if(side==='att') b.tA=t; else b.tD=t; } }
+
+// 포위
+function siegeDay(G){
+  const busy=new Set(G.battles.map(b=>b.p));
+  const here=new Map(); for(const a of G.armies){ if(a.path.length||busy.has(a.p)||a.ret>G.day) continue; const o=G.owner[a.p]; if(o<0||!atWar(G,a.o,o)) continue; const k=a.p; if(!here.has(k)) here.set(k,[]); here.get(k).push(a); }
+  for(const k in G.sieges) if(!here.has(+k)) delete G.sieges[k];
+  for(const [p,as] of here){
+    const o=as[0].o; const mine=as.filter(a=>a.o===o); const n=mine.reduce((s,a)=>s+a.n,0); const sup=mine.reduce((s,a)=>s+a.sup*a.n,0)/Math.max(1,n);
+    const c=G.C[o]; const art=(c.techs.has('cannon')?0.7:0)+(c.techs.has('rifle')?0.4:0)+(c.techs.has('flight')?0.4:0);
+    const fe=Math.max(0,fortLv(G,p)-art); const need=Math.max(1500,G.pop[p]*0.004);
+    const days=25*(1+fe)*(1+PAREA[p]/120000)/clamp(n/need,0.25,2.5)*(mine.some(a=>a.land>G.day)?2:1)/(0.5+0.5*sup);
+    const s=G.sieges[p]||(G.sieges[p]={o,prog:0}); if(s.o!==o){ s.o=o; s.prog=0; }
+    s.prog+=1/days;
+    if(s.prog>=1){ delete G.sieges[p]; const def=G.owner[p]; const w=findWar(G,o,def); const wasCap=G.C[def].cap===p;
+      setOwner(G,p,o); G.pop[p]*=0.95; if(w) w.score+=(o===w.a?1:-1)*(wasCap?3:1);
+      if(o===G.player) G.stats.conquered++;
+      if(o===G.player||def===G.player) news(G,`${G.C[o].name}, ${PNAME[p]} 점령`,'戰');
+      checkDeaths(G); fixCapitals(G); }
+  }
+}
+// 이동
+function moveDay(G){
+  const busy=new Set(G.battles.map(b=>b.p));
+  for(const a of G.armies){
+    if(busy.has(a.p)&&G.battles.some(b=>b.p===a.p&&(b.att.includes(a.id)||b.def.includes(a.id)))) continue;
+    if(!a.path.length) continue;
+    const st=a.path[0];
+    if(!passable(G,a.o,st.p)){ a.path=[]; continue; }
+    a.prog+=1;
+    if(a.prog>=st.days){ a.prog=0; a.path.shift(); const hostile=G.owner[st.p]>=0&&G.owner[st.p]!==a.o; if(st.sea&&hostile) a.land=G.day+20; a.p=st.p; a.arr=G.day; }
+  }
+}
+// 소모·사기·병참
+function armyUpkeepDay(G){
+  for(const a of G.armies){
+    const c=G.C[a.o]; a.sup = c._sup? c._sup[a.p] : (G.owner[a.p]===a.o?1:0.5);
+    const own=G.owner[a.p]===a.o; const t=D.WTERR[WT[a.p]];
+    const attr = own&&a.sup>0.6 ? 0 : 0.003*Math.pow(1-a.sup,2)+t.attr;
+    if(attr>0) a.n*=1-attr;
+    if(!G.battles.some(b=>b.p===a.p)) a.mor=clamp(a.mor+0.012*(0.3+0.7*a.sup),0,1);
+  }
+}
+// 역사 인물 장수 배치
+function assignGenerals(G){
+  for(const f of D.FIGS){ const s=G.figs[f.id]; if(!s||s.st!=='alive'||!s.svc||!has(G,s.svc)) continue; if(!(f.fx.mil>=0.15)) continue; if(G.y<f.a[0]||G.y>f.a[1]) continue;
+    const c=C(G,s.svc); if(G.armies.some(a=>a.gen.fig===f.id)) continue; const as=armiesOf(G,c.i).sort((x,y)=>y.n-x.n); if(!as.length) continue;
+    const a=as.find(x=>!x.gen.fig)||as[0]; a.gen={n:f.n,sk:6,fig:f.id}; if(c.i===G.player) news(G,`${f.n}, ${a.name} 지휘`,'將'); }
+  for(const a of G.armies) if(a.gen.fig){ const s=G.figs[a.gen.fig]; if(!s||s.st!=='alive'){ a.gen={n:genName(G,G.C[a.o]),sk:3}; } }
+}
+// AI 지휘 (플레이어의 자동 군단 포함)
+function armyAI(G,a){
+  const c=G.C[a.o]; const en=enemiesOf(G,a.o);
+  if(!en.length){ if(G.owner[a.p]!==a.o&&!a.path.length) sendHome(G,a,false); return; }
+  if(a.path.length){ const d=a.path[a.path.length-1].p; const o=G.owner[d]; if(o===a.o||o<0||en.includes(o)) return; }
+  if(a.ret>G.day) return;
+  const stance=stanceOf(G,a.o);
+  const myPow=a.n*(1+c.m.mil)*(0.35+0.65*a.mor);
+  // 우리 땅에 들어온 적
+  const intr=G.armies.filter(e=>en.includes(e.o)&&G.owner[e.p]===a.o&&!(e.ret>G.day));
+  if(intr.length){ intr.sort((x,y)=>pdist(x.p,a.p)-pdist(y.p,a.p)); const t=intr[0]; const ep=t.n*(1+G.C[t.o].m.mil)*(0.35+0.65*t.mor);
+    if(myPow>=ep*0.7){ orderMove(G,a,t.p); return; } if(a.home&&c.cap>=0&&a.p!==c.cap){ orderMove(G,a,c.cap); return; } }
+  if(a.home&&c.cap>=0){ if(a.p!==c.cap&&!a.path.length) orderMove(G,a,c.cap); if(stance==='def'||c.prov<6) return; }
+  if(stance==='def'){ // 방어: 잃은 땅을 되찾고, 국경을 지킨다
+    let best=-1,bd=1e9; for(let p=0;p<N;p++){ const o=G.owner[p]; if(o>=0&&en.includes(o)&&ADJ[p].some(q=>G.owner[q]===a.o)){ const d=pdist(a.p,p); const guard=G.armies.filter(e=>e.p===p&&e.o===o).reduce((s_,e)=>s_+e.n,0); if(guard<a.n*0.6&&d<bd){ bd=d; best=p; } } }
+    if(best>=0&&bd<600&&rng(G)<0.35) orderMove(G,a,best); return; }
+  // 공격: 약한 적 군단이나 가까운 적 지방
+  if(G.sieges[a.p]&&G.sieges[a.p].o===a.o&&!a.path.length) return;
+  const foes=G.armies.filter(e=>en.includes(e.o)&&pdist(e.p,a.p)<700&&!(e.ret>G.day));
+  for(const e of foes.sort((x,y)=>pdist(x.p,a.p)-pdist(y.p,a.p))){ const ep=e.n*(1+G.C[e.o].m.mil)*(0.35+0.65*e.mor)*D.WTERR[WT[e.p]].def; if(myPow*D.WTERR[WT[e.p]].atk>ep*1.2&&passable(G,a.o,e.p)){ if(orderMove(G,a,e.p)) return; } }
+  let best=-1,bd=1e9; for(let p=0;p<N;p++){ const o=G.owner[p]; if(o<0||!en.includes(o)) continue; if(G.sieges[p]&&G.sieges[p].o===a.o&&G.armies.some(x=>x.p===p&&x.o===a.o&&x!==a)) continue; const d=pdist(a.p,p)*(c.cap===p?0.7:1)*(G.C[o].cap===p?0.8:1); if(d<bd){ bd=d; best=p; } }
+  if(best>=0&&best!==a.p) orderMove(G,a,best);
 }
 function warDay(G){
-  if(!G.wars.length) return;
-  const nW=new Int32Array(G.C.length); for(const w of G.wars){ nW[w.a]++; nW[w.b]++; }
-  for(const w of [...G.wars]){
-    const A=G.C[w.a],B=G.C[w.b]; if(!A.alive||!B.alive){ G.wars=G.wars.filter(x=>x!==w); continue; }
-    const Sa=Math.max(1,A.str/nW[w.a]), Sb=Math.max(1,B.str/nW[w.b]);
-    // 공방 진척
-    for(const side of [0,1]){
-      const att=side?w.b:w.a, def=side?w.a:w.b, Sx=side?Sb:Sa, Sy=side?Sa:Sb; const D_=G.C[def];
-      let t=side?w.tb:w.ta;
-      if(t<0||G.owner[t]!==def){ t=pickTarget(G,att,def); if(side) {w.tb=t; w.pb=0;} else {w.ta=t; w.pa=0;} }
-      if(t<0) continue;
-      const dfn=Math.max(0,D_.m.def);
-      const a_=Math.pow(Sx,0.6), b_=Math.pow(Sy*(1+dfn)*1.15,0.6);
-      const ratio=a_/(a_+b_);
-      let pr=0.06*ratio*ratio*2/(1+PAREA[t]/80000)/(1+0.5*dfn);
-      if(side) w.pb+=pr; else w.pa+=pr;
-      if((side?w.pb:w.pa)>=1){
-        setOwner(G,t,att); G.pop[t]*=0.94;
-        w.score+= side?-1:1;
-        if(att===G.player) G.stats.conquered++;
-        if(side){w.tb=-1;w.pb=0;} else {w.ta=-1;w.pa=0;}
-        if(att===G.player||def===G.player) news(G,`${G.C[att].name}, ${PNAME[t]} 점령`,'戰');
-        G.C[def].soldiers*=0.97;
-        if(w.limited && !side){ w.got=(w.got||0)+1; if(w.got>=w.limited || G.C[def].prov<=1){ checkDeaths(G); fixCapitals(G); makePeace(G,w.a,w.b); continue; } }
-        checkDeaths(G); fixCapitals(G);
-        if(!G.C[def].alive) return;
-      }
-    }
-    // 소모
-    const la=0.0008*Math.sqrt(clamp(Sb/Sa,0.2,5)), lb=0.0006*Math.sqrt(clamp(Sa/Sb,0.2,5));
-    A.soldiers*=1-la; B.soldiers*=1-lb;
-  }
+  if(!G.armies) return;
+  moveDay(G);
+  startBattles(G);
+  for(const b of G.battles) aiTactic(G,b);
+  battleDay(G);
+  siegeDay(G);
+  armyUpkeepDay(G);
+  if(G.wars.length && G.day%5===0) for(const a of G.armies){ if(a.o===G.player&&!a.auto) continue; armyAI(G,a); }
+  else if(G.day%15===0) for(const a of G.armies){ if(a.o!==G.player&&!G.wars.some(w=>w.a===a.o||w.b===a.o)&&G.owner[a.p]!==a.o&&!a.path.length) sendHome(G,a,false); }
 }
 
 // ── 개척 ──
@@ -608,6 +849,7 @@ function startColonize(G,c,p){
 ENG.startColonize=startColonize;
 function opsDay(G){
   for(const op of [...G.ops]){
+    if(op.type==='road'){ if(G.owner[op.p]!==op.by){ G.ops=G.ops.filter(x=>x!==op); continue; } op.prog+=1/op.days; if(op.prog>=1){ G.road[op.p]=Math.max(G.road[op.p],op.lv); G.ops=G.ops.filter(x=>x!==op); if(op.by===G.player) news(G,`${PNAME[op.p]}: ${D.ROADS[op.lv].n} 완공`,'路'); } continue; }
     if(op.type!=='col') continue;
     if(G.owner[op.p]!==-1||!G.C[op.by].alive){ G.ops=G.ops.filter(x=>x!==op); continue; }
     op.prog+=1/op.days;
@@ -630,6 +872,8 @@ function aiMonth(G,c){
     const cand=[]; if(c.prov<cap) for(let p=0;p<N;p++) if(G.owner[p]===-1 && (!pre || (PTER[p]!==2&&PTER[p]!==3&&PTER[p]!==1&&Math.abs(PLAT[p])<55)) && canColonize(G,c,p)) cand.push(p);
     if(cand.length){ const ref=c.cap>=0?c.cap:cand[0]; cand.sort((a,b)=>pdist(a,ref)-pdist(b,ref)); startColonize(G,c,cand[Math.floor(rng(G)*Math.min(4,cand.length))]); }
   }
+  // 도로 건설
+  if(rng(G)<0.05){ const L=roadMax(c); let best=-1,bp=-1; for(let p=0;p<N;p++) if(G.owner[p]===c.i&&G.road[p]<L){ const v=G.pop[p]*(1+rng(G)); if(v>bp){ bp=v; best=p; } } if(best>=0){ const cost=roadCost(G,c,best,G.road[best]+1); if(c.gold>cost*2){ c.gold-=cost; G.road[best]++; } } }
   // 전쟁 선포
   const myWars=G.wars.filter(w=>w.a===c.i||w.b===c.i);
   if(!myWars.length && rng(G) < 0.0006*(0.3+c.aggr)*(G.div<15?0.5:1+G.div/15)*(G.y>1950?0.25:1)){
@@ -758,6 +1002,7 @@ ENG.tick = function(G){
       c.cur=null; }
   }
   opsDay(G);
+  if(G.day%10===0) for(const c of G.C){ if(c.alive&&(G.wars.some(w=>w.a===c.i||w.b===c.i)||c.i===G.player)) computeSupply(G,c); }
   warDay(G);
   // 사건
   const key=dkey(G.y,G.m,G.d);
@@ -797,9 +1042,10 @@ function monthly(G,E){
     c.gold += (c.income-c.expense)/12;
     const atWar=G.wars.some(w=>w.a===c.i||w.b===c.i);
     const target=c.pop*c.mob*Math.max(0.2,1+c.m.manp);
-    if(c.soldiers<target){ if(c.gold>0||c.soldiers<target*0.4) c.soldiers+=(target-c.soldiers)*0.06; }
+    syncSoldiers(G,c);
+    if(c.soldiers<target){ if(c.gold>0||c.soldiers<target*0.4) setSoldiers(G,c,c.soldiers+(target-c.soldiers)*0.06); }
     if(c.gold< -3*Math.max(c.income,1)){ c.gold=0; c.stab=clamp(c.stab-1,-3,3); if(c.i===G.player) chron(G,'국가 파산','빚을 갚지 못해 채무를 탕감했다. 신용과 민심이 크게 흔들린다.','債'); }
-    else c.soldiers-=(c.soldiers-target)*0.08;
+    else setSoldiers(G,c,c.soldiers-(c.soldiers-target)*0.08);
     let stT = c.m.stab + (atWar?-0.4:0) + (c.gold< -c.income?-0.8:0) - Math.max(0,(c.prov-25)/60) + (c.exile?0.5:0);
     stT=clamp(stT,-3,3);
     c.stab += (stT-c.stab)*0.03;
@@ -821,6 +1067,7 @@ function monthly(G,E){
     }
   }
   figMonth(G);
+  assignGenerals(G);
   aiOfferPeace(G);
   // 무작위 사건 (평균 약 2년에 1번)
   if(rng(G)<(1/28)*(G.y<-1000?0.08:G.y<500?0.3:G.y<1500?0.6:1)) randomEvent(G,E);
@@ -833,7 +1080,7 @@ function rebel(G,c){
   const tag='REB'+G.C.length; const r=newCountry(G,tag,`${c.name.replace(/\s*\(.*\)/,'')} 반란 세력`,{gov:'monarchy',cul:c.cul,kr:c.kr});
   for(const id of c.techs) r.techs.add(id); r.techDirty=true;
   for(const p of far) setOwner(G,p,r.i);
-  recalc(G,r); r.soldiers=r.pop*0.015; r.cap=far[0]; c.stab=Math.min(3,c.stab+1.5);
+  recalc(G,r); r.soldiers=r.pop*0.015; r.cap=far[0]; resetArmies(G,r); c.stab=Math.min(3,c.stab+1.5);
   news(G,`${c.name}에서 반란 — ${r.name} 독립`,'亂');
 }
 function renormK(G){
@@ -872,7 +1119,14 @@ ENG.act = {
     if(P.policies.length>=D.GOVS[P.gov].slots) return false; if(!availablePolicies(G,P).includes(id)) return false; const cost=P.income*0.15; if(P.gold<cost) return false; P.gold-=cost; P.policies.push(id); chron(G,`제도 시행: ${D.POLICIES[id].n}`,D.POLICIES[id].d,'政'); recalc(G,P); return true; },
   colonize(G,p){ const P=G.C[G.player]; const ok=startColonize(G,P,p); if(ok){ G.div=clamp(G.div+0.15,0,100); } return ok; },
   declareWar(G,ti){ const P=G.C[G.player]; if(P.truce[ti]>G.day) return false; if(findWar(G,G.player,ti)) return false; declareWar(G,G.player,ti); P.stab=clamp(P.stab-0.5,-3,3); G.div=clamp(G.div+2,0,100); return true; },
-  target(G,p){ const o=G.owner[p]; const w=findWar(G,G.player,o); if(!w) return false; const side = w.a===G.player?0:1; if(!frontTargets(G,G.player,o).includes(p)) return false; if(side){ w.tb=p; w.pb=0; } else { w.ta=p; w.pa=0; } return true; },
+  moveArmy(G,id,p){ const a=G.armies.find(x=>x.id===id&&x.o===G.player); if(!a) return false; if(G.battles.some(b=>b.att.includes(id)||b.def.includes(id))) return 'battle'; const ok=orderMove(G,a,p); if(ok){ a.auto=false; if(G.owner[p]>=0&&G.owner[p]!==G.player&&!atWar(G,G.player,G.owner[p])) return false; } return ok; },
+  stopArmy(G,id){ const a=G.armies.find(x=>x.id===id&&x.o===G.player); if(a){ a.path=[]; a.prog=0; a.auto=false; } },
+  toggleAuto(G,id){ const a=G.armies.find(x=>x.id===id&&x.o===G.player); if(a){ a.auto=!a.auto; if(a.auto) a.ret=0; } },
+  splitArmy(G,id){ const a=G.armies.find(x=>x.id===id&&x.o===G.player); if(!a||a.n<200) return null; const c=G.C[G.player]; const b=newArmy(G,c,a.p,a.n/2,{mor:a.mor,auto:a.auto}); a.n/=2; b.sup=a.sup; return b; },
+  mergeArmies(G,id){ const a=G.armies.find(x=>x.id===id&&x.o===G.player); if(!a) return 0; const others=G.armies.filter(x=>x!==a&&x.o===G.player&&x.p===a.p&&!G.battles.some(b=>b.att.includes(x.id)||b.def.includes(x.id))); for(const o of others){ a.mor=(a.mor*a.n+o.mor*o.n)/(a.n+o.n); a.n+=o.n; if(o.gen.sk>a.gen.sk) a.gen=o.gen; if(o.home) a.home=true; o.n=0; } G.armies=G.armies.filter(x=>x.n>0); return others.length; },
+  setStance(G,enemy,st){ const w=findWar(G,G.player,enemy); if(!w) return; if(w.a===G.player) w.sa=st; else w.sb=st; },
+  buildRoad(G,p){ return startRoad(G,G.C[G.player],p); },
+  setAutoBattle(G,v){ G.autoBattle=!!v; },
   offerPeace(G,ti){ const P=G.C[G.player]; if(P.lastPeaceAsk>G.day-180) return 'wait'; P.lastPeaceAsk=G.day; if(ENG.playerPeaceAccept(G,ti)){ makePeace(G,G.player,ti); return 'ok'; } return 'no'; },
   develop(G,p){ const P=G.C[G.player]; if(G.owner[p]!==G.player) return false; const cost=P.income*0.1; if(P.gold<cost) return false; P.gold-=cost; G.pop[p]*=1.04; return true; },
   relief(G,level,lost){ const P=G.C[G.player]; if(level===2){ P.gold-=P.income*0.25; P.stab=clamp(P.stab+0.4,-3,3); P.tmods.push({k:'prod',v:0.03,until:G.day+365*2,label:'재건'}); }
@@ -889,14 +1143,14 @@ ENG.has=has; ENG.C=C; ENG.rng=rng; ENG.inBox=inBox; ENG.expectedTech=expectedTec
 // ── 저장 / 불러오기 ──
 ENG.save=function(G){
   const o=Object.assign({},G); delete o._E;
-  o.owner=Array.from(G.owner); o.pop=Array.from(G.pop,v=>Math.round(v));
+  o.owner=Array.from(G.owner); o.pop=Array.from(G.pop,v=>Math.round(v)); o.road=Array.from(G.road||[]);
   o.C=G.C.map(c=>{ const x=Object.assign({},c); x.techs=[...c.techs]; delete x.fx; delete x.m; delete x._nbKnow; return x; });
   o.queue=G.queue.filter(q=>q.kind==='peace');
   return JSON.stringify(o);
 };
 ENG.load=function(s){
-  const o=JSON.parse(s); o.owner=Int16Array.from(o.owner); o.pop=Float64Array.from(o.pop);
-  o.C.forEach(c=>{ c.techs=new Set(c.techs); c.techDirty=true; });
+  const o=JSON.parse(s); o.owner=Int16Array.from(o.owner); o.pop=Float64Array.from(o.pop); o.road=Uint8Array.from(o.road||[]); if(o.road.length!==N) o.road=new Uint8Array(N); o.armies=o.armies||[]; o.battles=o.battles||[]; o.sieges=o.sieges||{};
+  o.C.forEach(c=>{ c.techs=new Set(c.techs); c.techDirty=true; delete c._sup; });
   o.queue=o.queue||[];
   for(const c of o.C) if(c.alive) recalc(o,c);
   return o;
