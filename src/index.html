@@ -45,7 +45,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 /* 날짜와 속도 */
 .clock{display:flex;align-items:center;gap:10px}
-.date{font-family:var(--f-display);font-weight:700;font-size:19px;min-width:168px;text-align:center;letter-spacing:.01em}
+.date{font-family:var(--f-display);font-weight:700;font-size:19px;width:190px;text-align:left;letter-spacing:.01em;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
 .speeds{display:flex;border:1px solid var(--line2);border-radius:6px;overflow:hidden}
 .speeds button{padding:4px 8px;font-family:var(--f-mono);font-size:12px;color:var(--fg2);border-right:1px solid var(--line)}
 .speeds button:last-child{border-right:0}
@@ -54,10 +54,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .ff{padding:4px 10px;border:1px solid var(--line2);border-radius:6px;font-size:12px;color:var(--fg2)}
 .ff:hover,.speeds button:hover{background:rgba(255,255,255,.06)}
 
-.stats{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
-.pill{display:flex;flex-direction:column;padding:2px 9px;border-left:1px solid var(--line);min-width:0}
+.stats{display:flex;gap:0;margin-left:auto;flex-wrap:nowrap;min-width:0}
+.sec{display:block}
+.pill{display:flex;flex-direction:column;padding:2px 9px;border-left:1px solid var(--line);min-width:0;flex:none;overflow:hidden}
 .pill .k{font-size:10.5px;color:var(--muted);letter-spacing:.06em}
-.pill .v{font-family:var(--f-mono);font-size:13.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill .v{font-family:var(--f-mono);font-size:13.5px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pill .v small{font-size:11px;color:var(--muted)}
 .pos{color:var(--good)}.neg{color:var(--bad)}
 .menu-btn{padding:6px 10px;border:1px solid var(--line2);border-radius:6px;font-size:12.5px}
@@ -266,7 +267,8 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
   #main{grid-template-columns:1fr;grid-template-rows:minmax(260px,52%) 1fr}
   #side{border-left:0;border-top:1px solid var(--line)}
   .stats{margin-left:0;width:100%}
-  .pill{min-width:0;flex:1 1 30%}
+  .pill{min-width:0;flex:1 1 30%;width:auto!important}
+  .stats{flex-wrap:wrap}
   .date{min-width:0;font-size:17px}
   #start{display:flex;flex-direction:column;overflow:auto}
   #start .l{padding:20px 16px 24px;border-right:0;overflow:visible;flex:none}
@@ -284,7 +286,7 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
   .speeds{overflow-x:auto;flex:1;min-width:0;scrollbar-width:none}
   .speeds button{padding:4px 6px;flex:none}
   .ff{padding:4px 7px;white-space:nowrap;font-size:11.5px}
-  .stats{order:4;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 0}
+  .stats{order:4;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px 0}
   .pill{padding:1px 6px}
   .pill .v{font-size:12px;overflow:hidden;text-overflow:ellipsis}
   .pill .v small{display:none}
@@ -345,6 +347,7 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
 <script src="data.js"></script>
 <script src="events.js"></script>
 <script src="nature.js"></script>
+<script src="people.js"></script>
 <script src="wardata.js"></script>
 <script src="engine.js"></script>
 <script src="ui.js"></script>

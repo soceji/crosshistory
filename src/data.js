@@ -131,7 +131,28 @@ const T = [
  ['mars','화성 정착',6,'trans',2085,['space','fusion'],{stab:.2},'인류가 다행성 종이 된다.']
 ];
 D.TECHS = {}; D.TECH_LIST = [];
-T.forEach(([id,n,era,cat,h,req,fx,d],i)=>{ const t={id,n,era,cat,h,req,fx,d,i}; D.TECHS[id]=t; D.TECH_LIST.push(t); });
+// 모든 기술에 경제 효과와 군사 효과를 보장한다 (범주별 기본값; 시대가 뒤일수록 크다)
+const ECO_D={food:['prod',.03],prod:['prod',.03],trans:['tax',.03],soc:['tax',.025],sci:['prod',.02],mil:['prod',.01]};
+const MIL_D={food:['manp',.05],prod:['mil',.02],trans:['mil',.02],soc:['manp',.04],sci:['mil',.02],mil:['mil',.03]};
+T.forEach(([id,n,era,cat,h,req,fx,d],i)=>{
+  fx=Object.assign({},fx); const sc=1+era*0.15;
+  if(!fx.prod&&!fx.tax){ const [k,v]=ECO_D[cat]; fx[k]=+(v*sc).toFixed(3); }
+  if(!fx.mil&&!fx.def&&!fx.manp){ const [k,v]=MIL_D[cat]; fx[k]=+(v*sc).toFixed(3); }
+  const t={id,n,era,cat,h,req,fx,d,i}; D.TECHS[id]=t; D.TECH_LIST.push(t); });
+// 기술의 부패 억제 효과
+Object.entries({law:-1,bureau:-2,exam:-3,massedu:-2,democ:-3,telegraph:-1,internet:-2}).forEach(([k,v])=>{ D.TECHS[k].fx.corr=v; });
+// 정부 형태별 기본 부패도 (%)
+D.GOV_CORR={tribe:6,chief:10,monarchy:16,theocracy:18,feudal:20,aristo:14,empire:24,central:15,absolut:22,constmon:11,republic:9,socialist:22,junta:30,exile:5};
+// 항구 등급
+D.PORTS = [
+  {n:'없음',req:null,cost:0,days:0},
+  {n:'나루',req:'boat',cost:1,days:90},
+  {n:'포구',req:'sail',cost:2,days:150},
+  {n:'무역항',req:'compass',cost:3,days:240},
+  {n:'대양 항구',req:'navig',cost:4,days:300},
+  {n:'근대 항만',req:'steamship',cost:6,days:360},
+  {n:'컨테이너 항만',req:'container',cost:8,days:420}
+];
 // 시대별 기본 연구비(연구점)
 D.ERA_COST = [40000, 90000, 90000, 42000, 28000, 42000, 65000];
 // 기술 1개당 1인당 생산성 증가율 (시대별)
@@ -187,7 +208,11 @@ D.POLICIES = {
  abolish:  {n:'노비·노예제 폐지', cat:'사회', req:'enlight', fx:{prod:.1,stab:-.1}, d:'사람을 사고파는 제도를 없앤다.'},
  welfarep: {n:'보편 복지', cat:'경제', req:'welfare', fx:{stab:.35,tax:-.08,tfr:.15}, d:'건강보험과 연금.'},
  natal:    {n:'출산 장려', cat:'사회', req:'welfare', fx:{tfr:.3,tax:-.06}, d:'육아 지원과 주거 정책으로 출산율을 끌어올린다.'},
- censor:   {n:'사상 통제', cat:'사회', req:'writing', fx:{stab:.4,res:-.15}, d:'불온한 사상과 서적을 금한다.'},
+ audit:    {n:'감찰 기구',   cat:'사회', req:'bureau', fx:{corr:-7,stab:-.05}, d:'관리를 감찰하는 독립 기구를 둔다. 중국의 어사대, 고려의 어사대.'},
+ salary:   {n:'관리 봉급 현실화', cat:'경제', req:'currency', fx:{corr:-5,tax:-.04}, d:'녹봉을 넉넉히 주어 뇌물의 유혹을 줄인다.'},
+ amhaeng:  {n:'암행어사',   cat:'사회', req:'exam', tags:['JOSEON','KOREMP'], fx:{corr:-9,stab:.05}, d:'왕이 몰래 보낸 어사가 지방 수령의 비리를 적발한다. "암행어사 출두요!"'},
+ pressfree:{n:'언론의 자유', cat:'사회', req:'democ', fx:{corr:-8,stab:-.05,res:.05}, d:'권력을 감시하는 신문과 방송.'},
+ censor:   {n:'사상 통제', cat:'사회', req:'writing', fx:{stab:.4,res:-.15,corr:4}, d:'불온한 사상과 서적을 금한다.'},
  openness: {n:'개방 외교', cat:'사회', req:'writing', fx:{res:.1,prod:.05,stab:-.1}, d:'외국의 문물을 받아들인다.'},
  // 한국사 고유 제도
  beomgeum: {n:'범금 8조', cat:'사회', req:'law', tags:['GOJOSEON'], fx:{stab:.35}, d:'사람을 죽인 자는 죽이고, 다치게 한 자는 곡식으로 갚는다.'},
