@@ -567,7 +567,7 @@ function startWonder(G,c,id,mul){
   c.gold-=wonderCost(c,w)*(mul||1); (G.wb=G.wb||[]).push({id,o:c.i,p,prog:0,days:w.days});
   if(c.i===G.player) chron(G,`${w.n} 착공`,w.d,'工'); return true; }
 function finishWonder(G,id,ci){ const w=D.WONDERS.find(x=>x.id===id); const p=WPROV[id]; (G.wond=G.wond||{})[id]={p,y:G.y,by:ci}; G.wb=(G.wb||[]).filter(x=>x.id!==id);
-  if(ci===G.player) chron(G,`${w.n} 완공`,`${w.d} 효과: 이 땅을 가진 나라에 계속 남는다.`,'工'); news(G,`${G.C[ci]?G.C[ci].name+', ':''}${w.n} 완공`,'工'); }
+  if(ci===G.player){ chron(G,`${w.n} 완공`,`${w.d} 효과: 이 땅을 가진 나라에 계속 남는다.`,'工'); G.queue.push({kind:'wonderDone',id}); } news(G,`${G.C[ci]?G.C[ci].name+', ':''}${w.n} 완공`,'工'); }
 function wonderMonth(G){
   for(const x of [...(G.wb||[])]){ if(G.owner[x.p]!==x.o){ G.wb=G.wb.filter(y=>y!==x); if(x.o===G.player) news(G,`${D.WONDERS.find(w=>w.id===x.id).n} 공사가 중단되었다 (땅을 잃음)`,'工'); continue; }
     x.prog+=30/x.days; if(x.prog>=1) finishWonder(G,x.id,x.o); }
@@ -587,7 +587,7 @@ function relicMonth(G){
     const y0=Math.max(f.a[0],Math.min(r.y,f.a[1])); if(G.y<y0) continue;
     const c=relicSvc(G,r); if(!c||!c.alive) continue; G.relicSt[r.id]='asked';
     const t=r.tech&&TECHS[r.tech];
-    const ev={t:`${f.n}의 「${r.n}」`,x:`${f.n}(${f.role})이(가) 「${r.n}」을(를) 만들려 한다. ${r.d}`,cat:'文',
+    const ev={relic:r.id,t:`${f.n}의 「${r.n}」`,x:`${f.n}(${f.role})이(가) 「${r.n}」을(를) 만들려 한다. ${r.d}`,cat:'文',
       o:[{t:`「${r.n}」을(를) 완성하게 한다`,tip:`유물 (${r.kind}): ${fxText(r.fx)}. 나라가 가지는 동안 계속 효과`,h:true,fx:(E_,tag)=>giveRelic(G,r.id,C(G,tag))},
          {t:t?`${t.n} 혁신에 매달리게 한다`:'학문 연구에 매달리게 한다',tip:t?(c.techs.has(r.tech)?'이미 아는 기술 — 연구 속도 +20% (15년)':t.req.every(q=>c.techs.has(q))?`「${t.n}」 즉시 습득`:'선행 기술이 모자라 연구 속도 +20% (15년)'):'연구 속도 +20% (15년)',h:false,dv:3,fx:(E_,tag)=>innovate(G,r.tech,C(G,tag),r)}]};
     if(c.i===G.player) G.queue.push({kind:'event',ev,subj:c.tag}); else applyOption(G,E,ev,ev.o[0],c.tag,false);

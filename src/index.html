@@ -24,6 +24,22 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .disl{height:142px;overflow:hidden}
 .cur .row{flex-wrap:nowrap;white-space:nowrap;gap:8px}
 .cur .row>*{overflow:hidden;text-overflow:ellipsis}
+.learn{margin:12px 0 4px;border:1px solid #33404a;border-radius:6px;background:#10171c;overflow:hidden}
+.learn .ph{position:relative;height:220px;background:#0b1014;display:grid;place-items:center;color:var(--muted);font-size:12.5px}
+.learn .ph img{width:100%;height:100%;object-fit:contain;display:block}
+.learn .ph .ld{padding:0 16px;text-align:center}
+.learn .cap{display:flex;justify-content:space-between;gap:8px;padding:6px 12px;font-size:11.5px;color:var(--muted);border-top:1px solid #222c33}
+.learn .cap a{color:var(--muted)}
+.learn .nt{padding:10px 12px 0;font-size:13.5px;line-height:1.7;color:var(--fg2)}
+.learn details{padding:8px 12px 10px}
+.learn summary{cursor:pointer;color:var(--gold2);font-size:13px;font-weight:600}
+.learn details p{font-size:13.5px;line-height:1.75;margin:8px 0 0;color:var(--fg)}
+.learn .lk{display:inline-block;margin-top:8px;font-size:12.5px;color:var(--gold2)}
+.lbtn{font-size:11.5px;color:var(--gold2);border:1px solid #4b3d22;border-radius:4px;padding:1px 7px;margin-left:6px;white-space:nowrap}
+.lbtn:hover{background:#2a2414}
+#learnv .evt{width:min(720px,100%)}
+#learnv .learn .ph{height:min(46vh,420px)}
+#learnv{position:relative;z-index:30}
 .tcur{height:146px;box-sizing:border-box;overflow:hidden}
 .clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;height:3em;line-height:1.5}
 .epil{margin-top:6px;height:86px;overflow-y:auto}
@@ -352,6 +368,7 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
 </section>
 
 <div id="modal"></div>
+<div id="learnv"></div>
 
 <script src="map.js"></script>
 <script src="data.js"></script>
@@ -361,5 +378,6 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
 <script src="disease.js"></script>
 <script src="wardata.js"></script>
 <script src="heritage.js"></script>
+<script src="learn.js"></script>
 <script src="engine.js"></script>
 <script src="ui.js"></script>

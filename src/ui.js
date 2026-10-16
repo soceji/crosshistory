@@ -459,23 +459,23 @@ function realRef(P){
 function provWonder(p,P){
   const ws=D.WONDERS.filter(w=>ENG.WPROV[w.id]===p); if(!ws.length) return '';
   return ws.map(w=>{ const b=G.wond&&G.wond[w.id]; const wb=(G.wb||[]).find(x=>x.id===w.id);
-    return `<p class="factline" style="margin:6px 0">◆ <b>${esc(w.n)}</b> — ${b?`${fy(b.y)} 완공 · ${esc(ENG.fxText(w.fx))}`:wb?`공사 중 ${pct(wb.prog)}`:'아직 없음'}</p>`; }).join(''); }
+    return `<p class="factline" style="margin:6px 0">◆ <b>${esc(w.n)}</b>${lbtn(learnSpec('wonder',w.id))} — ${b?`${fy(b.y)} 완공 · ${esc(ENG.fxText(w.fx))}`:wb?`공사 중 ${pct(wb.prog)}`:'아직 없음'}</p>`; }).join(''); }
 function paneHer(P){
   const own=D.WONDERS.filter(w=>G.wond&&G.wond[w.id]&&G.owner[G.wond[w.id].p]===G.player);
   const bld=(G.wb||[]).filter(x=>x.o===G.player);
   const can=D.WONDERS.filter(w=>!(G.wond&&G.wond[w.id])&&!(G.wb||[]).some(x=>x.id===w.id)&&G.owner[ENG.WPROV[w.id]]===G.player);
   const rel=D.RELICS.filter(r=>G.relics&&G.relics[r.id]&&G.relics[r.id].o===G.player);
   const figs=D.RELICS.filter(r=>!(G.relicSt||{})[r.id]&&G.figs[r.fig]&&G.figs[r.fig].st==='alive'&&G.figs[r.fig].svc===P.tag);
-  const W_=w=>`<div class="res-row" style="height:auto;white-space:normal;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)"><span style="color:var(--gold2)">◆</span><div style="min-width:0;flex:1"><b>${esc(w.n)}</b> <span class="sub">${fy(w.y)}</span><div class="sub">${esc(ENG.fxText(w.fx))}</div></div></div>`;
+  const W_=w=>`<div class="res-row" style="height:auto;white-space:normal;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)"><span style="color:var(--gold2)">◆</span><div style="min-width:0;flex:1"><b>${esc(w.n)}</b> <span class="sub">${fy(w.y)}</span>${lbtn(learnSpec('wonder',w.id))}<div class="sub">${esc(ENG.fxText(w.fx))}</div></div></div>`;
   const total=D.WONDERS.filter(w=>G.wond&&G.wond[w.id]).length, totalR=Object.keys(G.relics||{}).length;
   return `<h4>역사적 건물 <span class="s">세계에 ${total}곳 · 우리 땅에 ${own.length}곳 — 땅을 가진 나라가 효과를 받는다</span></h4>
   ${own.length?own.map(W_).join(''):'<p class="sub">우리 땅에 역사적 건물이 없다.</p>'}
   ${bld.map(x=>{ const w=D.WONDERS.find(y=>y.id===x.id); return `<div class="cur" style="margin-top:6px"><div class="row" style="justify-content:space-between"><b>${esc(w.n)} 공사 중</b><span class="num sub">${pct(x.prog)}</span></div><div class="bar"><i style="width:${x.prog*100}%"></i></div><div class="sub">${esc(ENG.fxText(w.fx))}</div></div>`; }).join('')}
   ${can.length?`<h4>지을 수 있는 건물 <span class="s">우리 땅에 있는 미완의 유산</span></h4>`+can.map(w=>{ const ok=!w.req||P.techs.has(w.req); const cost=ENG.wonderCost(P,w)*1.2;
-    return `<div class="cur" style="margin-top:6px"><b>${esc(w.n)}</b> <span class="sub">실제 ${fy(w.y)}</span><div class="sub">${esc(w.d)}</div><div class="sub">${esc(ENG.fxText(w.fx))} · 공사 ${(w.days/365).toFixed(1)}년</div>
+    return `<div class="cur" style="margin-top:6px"><b>${esc(w.n)}</b> <span class="sub">실제 ${fy(w.y)}</span>${lbtn(learnSpec('wonder',w.id))}<div class="sub">${esc(w.d)}</div><div class="sub">${esc(ENG.fxText(w.fx))} · 공사 ${(w.days/365).toFixed(1)}년</div>
       <button class="btn" data-wb="${w.id}" style="width:100%;margin-top:6px" ${ok&&P.gold>=cost?'':'disabled'}>${ok?'짓는다':`「${esc(D.TECHS[w.req].n)}」 필요`} <small>${fmoney(cost)}</small></button></div>`; }).join(''):''}
   <h4>역사적 유물 <span class="s">세계에 ${totalR}점 · 우리 나라 ${rel.length}점 — 수도를 빼앗기면 약탈당할 수 있다</span></h4>
-  ${rel.length?rel.map(r=>{ const f=D.FIGS.find(x=>x.id===r.fig); return `<div class="res-row" style="height:auto;white-space:normal;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)"><span style="color:#c3a7e0">❖</span><div style="min-width:0;flex:1"><b>${esc(r.n)}</b> <span class="sub">${esc(r.kind)} · ${esc(f?f.n:'')} · ${fy(G.relics[r.id].y)}</span><div class="sub">${esc(ENG.fxText(r.fx))}</div></div></div>`; }).join(''):'<p class="sub">아직 가진 유물이 없다. 우리 나라 인물이 활동하면 유물을 만들 기회가 온다.</p>'}
+  ${rel.length?rel.map(r=>{ const f=D.FIGS.find(x=>x.id===r.fig); return `<div class="res-row" style="height:auto;white-space:normal;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)"><span style="color:#c3a7e0">❖</span><div style="min-width:0;flex:1"><b>${esc(r.n)}</b>${lbtn(learnSpec('relic',r.id))} <span class="sub">${esc(r.kind)} · ${esc(f?f.n:'')} · ${fy(G.relics[r.id].y)}</span><div class="sub">${esc(ENG.fxText(r.fx))}</div></div></div>`; }).join(''):'<p class="sub">아직 가진 유물이 없다. 우리 나라 인물이 활동하면 유물을 만들 기회가 온다.</p>'}
   ${figs.length?`<h4>유물을 남길 인물 <span class="s">활동 시기가 되면 사건이 생긴다</span></h4>`+figs.map(r=>{ const f=D.FIGS.find(x=>x.id===r.fig); return `<div class="sub" style="padding:4px 0;border-top:1px solid var(--line)"><b style="color:var(--fg)">${esc(f.n)}</b> → 「${esc(r.n)}」 (${fy(Math.max(f.a[0],Math.min(r.y,f.a[1])))}경)${r.tech?` 또는 ${esc(D.TECHS[r.tech].n)} 혁신`:''}</div>`; }).join(''):''}`;
 }
 function paneHealth(P){
@@ -649,12 +649,12 @@ function paneFig(P){
     if(s.st==='dead') return ['사망','','dead'];
     const act=G.y>=f.a[0]&&G.y<=f.a[1]; return [act?'활동 중':G.y<f.a[0]?'성장 중':'은퇴',`${G.y-f.b}세`,act?'act':'']; };
   return `<p class="sub" style="margin-top:0">역사 인물은 정해진 해에 태어나 활동기에 나라에 보너스를 준다. 그들의 업적은 사건으로 찾아온다. 역사가 크게 바뀌면 태어나지 않을 수도 있다.</p>
-  ${rows.map(r=>{ const [s1,s2,cls]=stOf(r); return `<div class="fig ${cls==='dead'?'dim':''}"><div class="seal">${esc(ini(r.f.n))}</div><div class="n">${esc(r.f.n)} <small>${esc(r.f.role)} · ${fy(r.f.b)}–${fy(r.f.d)}</small> <span class="badge ${cls}">${s1}</span>${r.mine?'':` <span class="badge">${esc((G.C[G.tag[r.s&&r.s.svc]]||{}).name||'세계')}</span>`}</div>
+  ${rows.map(r=>{ const [s1,s2,cls]=stOf(r); return `<div class="fig ${cls==='dead'?'dim':''}"><div class="seal">${esc(ini(r.f.n))}</div><div class="n">${esc(r.f.n)}${lbtn(learnSpec('fig',r.f.id))} <small>${esc(r.f.role)} · ${fy(r.f.b)}–${fy(r.f.d)}</small> <span class="badge ${cls}">${s1}</span>${r.mine?'':` <span class="badge">${esc((G.C[G.tag[r.s&&r.s.svc]]||{}).name||'세계')}</span>`}</div>
     <div class="x">${esc(r.f.x)}<br><span class="sub">${s2?s2+' · ':''}활동기 ${fy(r.f.a[0])}–${fy(r.f.a[1])} · ${esc(fxStr(r.f.fx))||'—'}</span>${r.mine&&cls==='act'?`<div class="row" style="gap:4px;margin-top:6px">${['adm','mil','sci'].map(k=>{ const cur=(r.s.role||ENG.defRole(r.f))===k; return `<button class="chip ${cur?'on':''}" data-role="${k}" data-f="${r.f.id}">${{adm:'재상',mil:'장수',sci:'학자'}[k]}</button>`; }).join('')}</div>`:''}</div></div>`; }).join('')||'<p class="sub">이 나라와 이어진 역사 인물이 없다.</p>'}`;
 }
 function paneChron(){
   const L=G.chron.slice().reverse();
-  return `<ul class="chron">${L.map(c=>`<li><div class="g">${esc(kg(c.g))}</div><div><div class="y">${fy(c.y)} ${c.m}월</div><div class="t">${esc(c.t)}</div>${c.x?`<div class="x">${esc(c.x)}</div>`:''}</div></li>`).join('')}</ul>`;
+  return `<ul class="chron">${L.map(c=>`<li><div class="g">${esc(kg(c.g))}</div><div><div class="y">${fy(c.y)} ${c.m}월</div><div class="t">${esc(c.t)}${lbtn(learnFromChron(c))}</div>${c.x?`<div class="x">${esc(c.x)}</div>`:''}</div></li>`).join('')}</ul>`;
 }
 function bindPane(P){
   const pane=$('#pane');
@@ -710,12 +710,82 @@ function drawCharts(P){
   const c2=document.getElementById('ch2'); if(c2) lineChart(c2,[{name:'당신의 세계',color:'#d6a94f',pts:S.map(h=>[h.y,h.wp])},{name:'실제 역사',color:'#8a949b',dash:true,pts:S.map(h=>[h.y,h.wr])}],popFmt);
 }
 
+// ── 역사 공부: 실제 사진과 해설 (한국어 위키백과) ──
+const WK='https://ko.wikipedia.org'; const LCACHE={}; let wikiBlocked=false;
+async function wjson(url){ const r=await fetch(url); if(!r.ok){ const e=new Error('http'); e.status=r.status; throw e; } return r.json(); }
+async function wsearch(term){ const j=await wjson(`${WK}/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(term)}&srlimit=1&format=json&origin=*`); const h=j.query&&j.query.search&&j.query.search[0]; return h?h.title:null; }
+async function wsummary(title){ try{ const s=await wjson(`${WK}/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g,'_'))}`); return s&&s.type!=='disambiguation'?s:null; }catch(e){ if(e.status) return null; throw e; } }
+function wikiLookup(q){
+  if(LCACHE[q]) return LCACHE[q];
+  return LCACHE[q]=(async()=>{
+    try{ const c=localStorage.getItem('wk3:'+q); if(c) return JSON.parse(c); }catch(e){}
+    let sum=null;
+    if(q.startsWith('?')){ const t=await wsearch(q.slice(1)); if(t) sum=await wsummary(t); }
+    else { sum=await wsummary(q); if(!sum){ const t=await wsearch(q); if(t) sum=await wsummary(t); } }
+    if(!sum) return null;
+    let ext=sum.extract||'';
+    try{ const j=await wjson(`${WK}/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&redirects=1&titles=${encodeURIComponent(sum.title)}&format=json&origin=*`); const pg=Object.values(j.query.pages)[0]; if(pg&&pg.extract&&pg.extract.length>ext.length) ext=pg.extract; }catch(e){}
+    let img=null, file=null;
+    const o=sum.originalimage, t=sum.thumbnail;
+    if(o){ img=o.width>1000&&t?t.source.replace(/\/\d+px-/,'/1000px-'):o.source; file=decodeURIComponent(o.source.split('/').pop()); }
+    else if(t){ img=t.source; file=decodeURIComponent(t.source.split('/').pop().replace(/^\d+px-/,'')); }
+    if(!img&&sum.wikibase_item){ try{ const j=await wjson(`https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${sum.wikibase_item}&property=P18&format=json&origin=*`); const v=j.claims&&j.claims.P18&&j.claims.P18[0].mainsnak.datavalue.value; if(v){ file=v; img=`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(v)}?width=1000`; } }catch(e){} }
+    const res={title:sum.title,ext,img,file,url:(sum.content_urls&&sum.content_urls.desktop.page)||`${WK}/wiki/${encodeURIComponent(sum.title)}`};
+    try{ localStorage.setItem('wk3:'+q,JSON.stringify(res)); }catch(e){}
+    return res;
+  })().catch(e=>{ if(!e.status) wikiBlocked=true; delete LCACHE[q]; return {err:true}; });
+}
+// 무엇을 보여 줄지: {q 검색어, title 제목, note 게임 속 해설}
+function learnSpec(kind,x){
+  if(!x) return null;
+  if(kind==='ev'){ if(x.relic) return learnSpec('relic',x.relic); if(x.wonder) return learnSpec('wonder',x.wonder); if(x.y>2025) return null; const q=D.WIKI_EV[x.t]||x.t; return {q,title:x.t}; }
+  if(kind==='wonder'){ const w=D.WONDERS.find(y=>y.id===x); return w?{q:w.wiki||w.n,title:w.n,note:w.note||w.d,sub:`역사적 건물 · ${fy(w.y)}`}:null; }
+  if(kind==='relic'){ const r=D.RELICS.find(y=>y.id===x); if(!r) return null; const f=D.FIGS.find(y=>y.id===r.fig); return {q:r.wiki||r.n,title:r.n,note:r.note||r.d,sub:`역사적 유물 · ${r.kind} · ${f?f.n:''} · ${fy(r.y)}`}; }
+  if(kind==='fig'){ const f=D.FIGS.find(y=>y.id===x); return f?{q:f.wiki||f.n,title:f.n,note:f.x,sub:`${f.role} · ${fy(f.b)}–${fy(f.d)}`}:null; }
+  if(kind==='dis'){ const d=D.DISEASES[x]; return d?{q:d.wiki||d.n,title:d.n,note:d.d,sub:'질병'}:null; }
+  return null;
+}
+function learnHTML(sp,opt){ if(!sp) return ''; opt=opt||{};
+  return `<div class="learn" data-q="${esc(sp.q)}"><div class="ph"><div class="ld">${wikiBlocked?'이 화면에서는 사진을 불러올 수 없다.':'위키백과에서 사진을 찾는 중…'}</div></div>
+   <div class="cap"><span>${esc(sp.title)}</span><span class="src"></span></div>
+   ${opt.note&&sp.note?`<div class="nt">${esc(sp.note)}</div>`:''}
+   <details ${opt.open?'open':''}><summary>자세한 해설 (위키백과)</summary><div class="ex"><p class="sub">불러오는 중…</p></div></details></div>`; }
+function hydrateLearn(root){
+  root.querySelectorAll('.learn[data-q]').forEach(async el=>{ const q=el.dataset.q; const r=await wikiLookup(q); if(!el.isConnected) return;
+    const ph=el.querySelector('.ph'), src=el.querySelector('.src'), ex=el.querySelector('.ex');
+    const search=`${WK}/w/index.php?search=${encodeURIComponent(q.replace(/^\?/,''))}`;
+    if(!r||r.err){ ph.style.height='auto'; ph.style.padding='18px 0'; ph.innerHTML=`<div class="ld">${r&&r.err&&wikiBlocked?'이 화면의 보안 정책 때문에 사진을 불러오지 못했다.<br>아래 링크를 누르면 위키백과에서 사진과 해설을 볼 수 있다.':'위키백과에서 맞는 문서를 찾지 못했다.'}</div>`;
+      ex.innerHTML=`<a class="lk" href="${search}" target="_blank" rel="noopener">위키백과에서 「${esc(q.replace(/^\?/,''))}」 찾아보기 ↗</a>`; return; }
+    if(r.img){ const im=new Image(); im.alt=r.title; im.loading='lazy'; im.onerror=()=>{ ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.src=r.img; ph.innerHTML=''; ph.appendChild(im);
+      src.innerHTML=`<a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(r.file||'')}" target="_blank" rel="noopener">사진 출처·저작권: 위키미디어 공용 ↗</a>`; }
+    else ph.innerHTML=`<div class="ld">이 문서에는 사진이 없다.</div>`;
+    const paras=(r.ext||'').split(/\n+/).filter(Boolean).slice(0,6);
+    ex.innerHTML=(paras.map(p=>`<p>${esc(p)}</p>`).join('')||'<p class="sub">요약이 없다.</p>')+`<a class="lk" href="${r.url}" target="_blank" rel="noopener">위키백과 「${esc(r.title)}」 전문 읽기 ↗</a><div class="sub" style="margin-top:4px">해설: 한국어 위키백과 (CC BY-SA 4.0)</div>`; });
+}
+let learnWasOpen=false;
+function openLearn(sp){ if(!sp) return; const v=$('#learnv'); learnWasOpen=modalOpen; modalOpen=true;
+  v.innerHTML=`<div class="ovl"><div class="evt" role="dialog" aria-modal="true" aria-labelledby="lv-t"><div class="hd"><div class="seal">해설</div><div><div class="when">${esc(sp.sub||'역사 사전')}</div><h2 id="lv-t">${esc(sp.title)}</h2></div></div>
+   <div class="body" style="max-width:none">${learnHTML(sp,{note:true,open:true})}</div><div class="opts"><button class="opt" id="lvx"><div class="l">닫고 게임으로 돌아가기</div></button></div></div></div>`;
+  hydrateLearn(v); const x=$('#lvx'); x.focus({preventScroll:true}); const close=()=>{ v.innerHTML=''; modalOpen=learnWasOpen; };
+  x.onclick=close; v.querySelector('.ovl').onclick=e=>{ if(e.target.classList.contains('ovl')) close(); }; }
+// 연대기 항목에서 해설 찾기
+function learnFromChron(c){ const t=c.t||'';
+  const ev=ENG.EVS.find(e=>e.t===t); if(ev){ const sp=learnSpec('ev',ev); if(sp) return sp; }
+  const m=/「(.+?)」/.exec(t); if(m){ const r=D.RELICS.find(x=>x.n===m[1]); if(r) return learnSpec('relic',r.id); }
+  const w=D.WONDERS.find(x=>t.startsWith(x.n)); if(w) return learnSpec('wonder',w.id);
+  const f=D.FIGS.find(x=>t.startsWith(x.n+' ')||t.startsWith(x.n+',')); if(f) return learnSpec('fig',f.id);
+  const d=Object.keys(D.DISEASES).find(k=>t.startsWith(D.DISEASES[k].n)); if(d) return learnSpec('dis',d);
+  return null; }
+const LMAP={}; function lbtn(sp){ if(!sp) return ''; const k=sp.q+'|'+sp.title; LMAP[k]=sp; return `<button class="lbtn" data-lr="${esc(k)}">사진·해설</button>`; }
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-lr]'); if(!b) return; e.stopPropagation(); openLearn(LMAP[b.dataset.lr]); },true);
+
 // ── 모달 ──
 function showModal(o){
   modalOpen=true; const m=$('#modal');
   m.innerHTML=`<div class="ovl"><div class="evt" role="dialog" aria-modal="true" aria-labelledby="evt-t"><div class="hd"><div class="seal">${esc(o.glyphRaw?o.glyph:kg(o.glyph||'史'))}</div><div><div class="when">${esc(o.when||'')}</div><h2 id="evt-t">${esc(o.title)}</h2>${o.who?`<div class="who">${esc(o.who)}</div>`:''}</div></div>
-   <div class="body">${o.body}</div><div class="opts">${o.opts.map((x,i)=>`<button class="opt" data-i="${i}"><div class="l">${esc(String(x.t).replace(/\s*\(역사\)/,''))}${x.h?'<span class="h">역사</span>':''}</div>${x.tip?`<div class="tp">${esc(x.tip)}</div>`:''}${x.dv?`<div class="dv">역사 개변도 +${x.dv}</div>`:''}</button>`).join('')}</div></div></div>`;
+   <div class="body">${o.body}${o.learn?learnHTML(o.learn,{note:o.learnNote}):''}</div><div class="opts">${o.opts.map((x,i)=>`<button class="opt" data-i="${i}"><div class="l">${esc(String(x.t).replace(/\s*\(역사\)/,''))}${x.h?'<span class="h">역사</span>':''}</div>${x.tip?`<div class="tp">${esc(x.tip)}</div>`:''}${x.dv?`<div class="dv">역사 개변도 +${x.dv}</div>`:''}</button>`).join('')}</div></div></div>`;
   m.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ const x=o.opts[+b.dataset.i]; m.innerHTML=''; modalOpen=false; try{ x.go&&x.go(); }catch(e){ console.error(e); } renderAll(true); });
+  if(o.learn) hydrateLearn(m);
   const first=m.querySelector('.opt'); if(first) first.focus({preventScroll:true});
 }
 function showNext(){
@@ -725,7 +795,7 @@ function showNext(){
       opts:[{t:'강화를 받아들인다',tip:'전쟁 종료, 5년 휴전',go:()=>ENG.makePeace(G,G.player,q.from)},{t:'거절하고 싸운다',tip:'전쟁 계속',go:()=>{}}]}); return; }
   if(q.kind==='figure'){ const f=D.FIGS.find(x=>x.id===q.id); if(!f) return; const R=ENG.ROLE_FX; const dr=ENG.defRole(f);
     const nm={adm:'재상으로 삼는다',mil:'장수로 삼는다',sci:'학자로 삼는다'}, ds={adm:'나라 살림과 감찰을 맡긴다',mil:'가장 큰 군단의 지휘를 맡긴다 (장수 역량 6)',sci:'학문과 기술 개발을 맡긴다'};
-    showModal({glyph:ini(f.n),glyphRaw:true,when:fdate(G),title:`${f.n}, 역사의 무대에 서다`,who:`${f.role} · ${fy(f.b)}–${fy(f.d)}`,body:`${esc(f.x)}<br><br>고유 효과: ${esc(fxStr(f.fx))||'없음'}. 어떤 자리를 맡길 것인가? 직책에 따라 추가 효과가 붙는다. 인물 패널에서 언제든 바꿀 수 있다.`,
+    showModal({glyph:ini(f.n),glyphRaw:true,when:fdate(G),title:`${f.n}, 역사의 무대에 서다`,learn:learnSpec('fig',f.id),who:`${f.role} · ${fy(f.b)}–${fy(f.d)}`,body:`${esc(f.x)}<br><br>고유 효과: ${esc(fxStr(f.fx))||'없음'}. 어떤 자리를 맡길 것인가? 직책에 따라 추가 효과가 붙는다. 인물 패널에서 언제든 바꿀 수 있다.`,
       opts:['adm','mil','sci'].map(r=>({t:nm[r],tip:`${ds[r]} — ${fxStr(R[r])}${r===dr?' · 이 인물에게 어울리는 자리':''}`,h:r===dr,go:()=>ENG.act.setFigRole(G,f.id,r)}))}); return; }
   if(q.kind==='stance'){ const w=q.war; if(!G.wars.includes(w)) return; const mine=w.a===G.player; const e=G.C[mine?w.b:w.a];
     showModal({glyph:'戰',when:fdate(G),title:`${e.name}과(와)의 전쟁`,who:`${mine?'우리가 선전포고했다':'적이 선전포고했다'} · 적 병력 ${fmoney(ENG.armiesOf(G,e.i).reduce((s_,a)=>s_+a.n,0))}명 · 우리 ${fmoney(P.soldiers)}명`,
@@ -741,9 +811,12 @@ function showNext(){
       opts:pick.map(x=>({t:x.n,tip:`${x.d} ${x.fx==='gen'?'':x.gamble?`성공 확률 ${Math.round(x.gamble*100)}%`:`전투력 ×${x.fx}`}${x.loss&&x.loss!==1?` · 아군 손실 ×${x.loss}`:''}${x.trap?` · 이기면 적 군단 궤멸 ${Math.round(x.trap*100)}%`:''}`,go:()=>{ const r=ENG.battleTactic(G,b.id,x.id); if(r) toast(`${x.n}: ${r}`); }}))}); return; }
   if(q.kind==='epi'){ const e=(G.epi||[]).find(x=>x.id===q.id); if(!e) return; const x=D.DISEASES[e.d]; const f=ENG.epiFx(G,P,x);
     const acts=D.EPI_ACTIONS.filter(a=>!a.need||P.techs.has(a.need));
-    showModal({glyph:'역병',glyphRaw:true,when:fdate(G),title:`${ga(x.n)} 우리 땅에 들어왔다`,who:`${P.name} · 위생 ${(P.san||0).toFixed(1)}/5`,
+    showModal({glyph:'역병',glyphRaw:true,when:fdate(G),title:`${ga(x.n)} 우리 땅에 들어왔다`,learn:learnSpec('dis',e.d),who:`${P.name} · 위생 ${(P.san||0).toFixed(1)}/5`,
       body:`${esc(x.d)}<br><br>이미 ${Object.keys(e.inf).length+Object.keys(e.done).length}개 지방을 휩쓸어 약 <b>${esc(fpop(e.deaths))}</b>이(가) 죽었다. 우리 위생 수준에서는 감염 ×${f.inf.toFixed(2)}, 치명률 ×${f.cfr.toFixed(2)}. 어떻게 막을 것인가?`,
       opts:acts.map(a=>({t:a.n,tip:`${a.d}${a.cost?` · 국고 −${fmoney(P.income*a.cost)}`:''}${a.prod?` · 생산 ${Math.round(a.prod*100)}%`:''}`,h:a.id==='quarantine'&&G.y<1900||a.id==='testing',go:()=>ENG.act.epiAction(G,a.id,e.id)}))}); return; }
+  if(q.kind==='wonderDone'){ const w=D.WONDERS.find(x=>x.id===q.id); if(!w) return;
+    showModal({glyph:'건축',glyphRaw:true,when:fdate(G),title:`${w.n} 완공`,who:`${P.name} · 실제 역사 ${fy(w.y)}`,body:`${esc(w.d)}<br><span class="sub">효과: ${esc(ENG.fxText(w.fx))} — 이 땅을 가진 나라가 계속 받는다.</span>`,learn:learnSpec('wonder',w.id),learnNote:true,
+      opts:[{t:'계속',tip:'',go:()=>{}}]}); return; }
   if(q.kind==='relief'){
     showModal({glyph:q.type==='화산'?'火':'震',when:fdate(G),title:q.name,who:`${P.name} · ${q.type==='화산'?'VEI '+q.M:'규모 '+q.M.toFixed(1)}`,
       body:`${q.type==='화산'?'화산재와 화쇄류가 마을을 덮쳤다.':'땅이 갈라지고 집과 성벽이 무너졌다.'} 우리 백성 약 <b>${esc(fpop(q.deaths))}</b>이(가) 목숨을 잃었다. 살아남은 사람들이 조정을 바라보고 있다.`,
@@ -753,7 +826,7 @@ function showNext(){
   const ev=q.alt?q.ev.pAlt:q.ev; const opts=q.ask?q.ev.po:ev.o;
   const body=(q.ev.at&&q.ev.px&&!q.alt?`<p style="margin:0 0 10px;color:var(--gold2)">${esc(q.ev.px)}</p>`:'')+esc(ev.x||q.ev.x);
   const wasSpeed=speed;
-  showModal({glyph:q.ev.cat||'史',when:fdate(G),title:ev.t||q.ev.t,who:P.name+(q.ev.chain?' · 앞선 선택의 결과':''),body,
+  showModal({glyph:q.ev.cat||'史',when:fdate(G),title:ev.t||q.ev.t,who:P.name+(q.ev.chain?' · 앞선 선택의 결과':''),body,learn:q.random||q.ev.chain?null:learnSpec('ev',q.ev),learnNote:!!(q.ev.relic||q.ev.wonder),
     opts:opts.map(o=>({t:o.t,tip:o.tip,h:o.h&&!q.random,dv:(o.dv!=null?o.dv:(o.h?0:4))||0,go:()=>{
       ENG.applyOption(G,G._E||ENG.api(G),q.ev,o,q.subj,true); if(!q.random) ENG.runAfter(G,G._E,q.ev);
       ENG.chron(G,ev.t||q.ev.t,`${ev.x||q.ev.x} — 선택: ${o.t}`,q.ev.cat||'史'); ENG.news(G,ev.t||q.ev.t,q.ev.cat);
