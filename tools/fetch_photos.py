@@ -68,7 +68,7 @@ BAD_F = ('entrance', 'logo', 'sign', 'headquarter', 'tower', 'building', 'stadiu
 LOG = []
 PREVIEW = {}
 # 후보를 직접 보고 고른 사진 (문서 → 공용 파일 이름)
-PIN = {}
+PIN = {'포스코': 'POSCO.jpg', '황룡사': 'A scale model of Hwangnyongsa pagoda.jpg'}
 def commons_candidates(term):
     r = get('https://commons.wikimedia.org/w/api.php', params={'action': 'query', 'list': 'search', 'srnamespace': 6, 'srsearch': term, 'srlimit': 15, 'format': 'json'})
     try: return [h['title'].split(':', 1)[-1] for h in r.json()['query']['search'] if h['title'].lower().endswith(('.jpg', '.jpeg', '.png'))]
