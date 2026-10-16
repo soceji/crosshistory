@@ -13,6 +13,11 @@ S = requests.Session()
 S.headers['User-Agent'] = 'crosshistory-photo-fetch/1.0 (https://github.com/soceji/crosshistory; educational history game)'
 W, H, QUAL, EXT_MAX = 240, 180, 62, 900
 BAD = ('성교', '포르노', '성인 영화', '음란', '에피소드 목록')
+# 대표 사진 대신 지정한 사진을 쓴다: 문서 → 위키미디어 공용 검색어 (앞에서부터 차례로 시도)
+IMG_SEARCH = {
+    '황룡사': ['Hwangnyongsa pagoda model', 'Hwangnyongsa nine-story wooden pagoda model', '황룡사 구층목탑 모형', 'Hwangnyongsa reconstruction'],
+    '포스코': ['POSCO Pohang Steel Works', 'Pohang Iron and Steel Works', 'POSCO Pohang steelworks aerial', '포항제철소'],
+}
 SKIP_IMG = ('flag', 'logo', 'icon', 'symbol', 'signature', 'coat_of_arms', 'emblem', 'wiki', 'commons', 'question', 'edit', 'ambox', 'location', 'locator', 'blank', 'stub', 'disambig', 'portal')
 
 def get(url, **kw):
@@ -58,6 +63,15 @@ def thumb(url):
         return 'data:image/jpeg;base64,' + base64.b64encode(b.getvalue()).decode()
     except Exception: return None
 
+def commons_file(term):
+    r = get('https://commons.wikimedia.org/w/api.php', params={'action': 'query', 'list': 'search', 'srnamespace': 6, 'srsearch': term, 'srlimit': 10, 'format': 'json'})
+    try:
+        for h in r.json()['query']['search']:
+            n = h['title'].split(':', 1)[-1]
+            if n.lower().endswith(('.jpg', '.jpeg', '.png')): return n
+    except Exception: pass
+    return None
+
 def lookup(q):
     sm = None
     if q.startswith('?'):
@@ -95,9 +109,15 @@ def lookup(q):
                 if not n.lower().endswith(('.jpg', '.jpeg', '.png')) or any(b in n.lower() for b in SKIP_IMG): continue
                 file = n; src = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(n)}?width=320"; break
         except Exception: pass
+    ov = None
+    for term in IMG_SEARCH.get(q, []):
+        n = commons_file(term)
+        if n: ov = n; break
+    if ov:
+        file = ov; src = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(ov)}?width=320"
     img = thumb(src) if src else None
     url = (sm.get('content_urls') or {}).get('desktop', {}).get('page') or f"{WK}/wiki/{urllib.parse.quote(title)}"
-    return {'t': title, 'e': ext, 'i': img, 'f': file if img else None, 'u': url}
+    return {'t': title, 'e': ext, 'i': img, 'f': file if img else None, 'u': url, 'o': 1 if ov else 0}
 
 def main():
     qs = json.load(open(QFILE, encoding='utf-8'))
@@ -107,7 +127,7 @@ def main():
         except Exception: old = {}
     out = {}; miss = 0
     for n, q in enumerate(qs):
-        if q in old and old[q] and old[q].get('i'):
+        if q in old and old[q] and old[q].get('i') and (q not in IMG_SEARCH or old[q].get('o')):
             out[q] = old[q]; continue
         try: r = lookup(q)
         except Exception as e:

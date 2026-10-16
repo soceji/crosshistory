@@ -39,6 +39,8 @@
 | `src/events.js` | 역사 인물, 역사 사건, 무작위 사건 |
 | `src/wardata.js` | 전투 지형·산악/구릉 지대·도로 등급·전술 |
 | `src/people.js` | 추가 역사 인물, 연쇄 사건 |
+| `src/events_kr.js` | 고려·조선의 세세한 사건 (실록 기반) |
+| `tools/fix_map.js` | 바다 건너 흩어진 지방 조각을 정리하는 지도 보정기 |
 | `src/heritage.js` | 역사적 건물, 역사적 유물, 사상가·발명가, 계략 전술 |
 | `tools/` | 사진 검색어 목록 생성(`export_queries.js`)과 위키백과 사진 수집기(`fetch_photos.py`, GitHub Actions에서 실행) |
 | `src/learn.js` | 사건·건물·유물·인물의 위키백과 문서 연결과 해설 |

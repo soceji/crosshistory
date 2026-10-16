@@ -61,6 +61,21 @@ D.WIKI_EV = {
  '세계보건기구 설립':'세계 보건 기구','아시아 독감':'?1957년 아시아 독감','홍콩 독감':'?1968년 홍콩 독감','천연두 근절':'?천연두 근절'
 };
 
+Object.assign(D.WIKI_EV, D.WIKI_EV_KR||{});
+
+// ── 기술: 위키백과 문서 ──
+const TW={fire:'?불의 이용 인류 역사',stone:'간석기',lang:'언어',hunt:'수렵',fish:'어업',pottery:'토기',agri:'?농업의 기원 신석기 혁명',domest:'가축화',spirit:'애니미즘',village:'?신석기 시대 정착 마을',
+ boat:'?통나무배',weave:'직조',copper:'?구리 야금 역사',irrig:'관개',wheel:'바퀴',bronze:'청동기 시대',writing:'문자',calendar:'역법',masonry:'?석조 건축',sail:'돛',horse:'?말의 가축화',chariot:'?전차 고대 전투용 수레',
+ math:'?수학의 역사',law:'함무라비 법전',iron:'철기 시대',currency:'화폐',astro:'?천문학의 역사',roads:'?로마 가도',philo:'철학',crossbow:'쇠뇌',medicine:'?의학의 역사',eng:'?로마 수도교',bureau:'관료제',
+ religion:'?세계 종교',paper:'종이',stirrup:'등자',watermill:'물레방아',exam:'과거제',woodprint:'목판 인쇄',feudal:'봉건제',threefield:'?삼포식 농법',castle:'?성 축성',gunpowder:'화약',compass:'나침반',
+ guilds:'길드',univ:'?볼로냐 대학교',banking:'은행',metaltype:'금속활자',cannon:'대포',navig:'대항해시대',movable:'?구텐베르크 인쇄기',firearms:'화승총',milrev:'?군사 혁명 근세',newcrops:'?콜럼버스의 교환',
+ jointst:'주식회사',scimeth:'과학적 방법',physics:'고전역학',enlight:'계몽주의',cokeiron:'?코크스 제철',steam:'증기 기관',vaccine:'백신',textile:'?방적기 산업 혁명',chem:'?화학의 역사',consti:'입헌주의',
+ nation:'민족주의',steamship:'증기선',rail:'철도',elec:'전기',telegraph:'전신',social:'사회주의',rifle:'?강선 소총',steel:'강철',germ:'세균설',massedu:'의무 교육',phone:'전화기',combust:'내연기관',
+ fert:'?하버-보슈법',radio:'무선 통신',flight:'비행기',assembly:'?조립 라인 포드',armor:'?전차 (무기)',democ:'민주주의',antibio:'항생제',nucphys:'핵물리학',rocket:'로켓',nuke:'핵무기',computer:'컴퓨터',
+ welfare:'복지 국가',nucpower:'원자력 발전',container:'?컨테이너선',satellite:'인공위성',semicon:'반도체',greenrev:'녹색 혁명',internet:'인터넷',mobile:'휴대 전화',genome:'인간 유전체 프로젝트',
+ renew:'재생 가능 에너지',ai:'인공지능',ev:'전기자동차',biotech:'생명공학',quantum:'양자 컴퓨터',space:'?우주 개발 민간',carbon:'탄소 중립',fusion:'핵융합 발전',longev:'?노화 연구 수명 연장',agi:'범용 인공지능',mars:'?화성 유인 탐사'};
+for(const t of D.TECH_LIST) t.wiki=TW[t.id]||t.n;
+
 // ── 역사적 건물: 위키백과 문서와 해설 ──
 const WN = {
  stonehenge:['스톤헨지','영국 윌트셔의 거석 유적. 기원전 3000년경부터 1500년 넘게 여러 단계로 세워졌다. 큰 사르센석은 25톤에 이르고, 안쪽의 청석은 약 240km 떨어진 웨일스 프레셀리 언덕에서 옮겨 왔다. 1986년 세계유산.'],
@@ -74,7 +89,7 @@ const WN = {
  pantheon:['?판테온 로마 신전','이탈리아 로마. 하드리아누스 황제가 125년경 다시 지은 신전이다. 지름 43.3m 돔 꼭대기에 지름 약 8m의 둥근 구멍(오쿨루스)이 뚫려 있다. 7세기부터 성당으로 쓰여 거의 온전히 남았다.'],
  hagiasophia:['아야 소피아','튀르키예 이스탄불. 동로마 황제 유스티니아누스 1세가 532~537년에 지었다. 지름 약 31m의 돔이 창문 띠 위에 떠 있는 듯 보인다. 1453년 오스만 정복 뒤 모스크, 1934년 박물관이 되었고 2020년 다시 모스크가 되었다.'],
  cheomseongdae:['첨성대','경상북도 경주. 신라 선덕여왕 때(7세기 중엽) 세운 높이 약 9.2m의 석조 건축물로, 360여 개의 돌을 쌓고 가운데에 네모난 창을 냈다. 국보. 천문 관측대라는 설이 일반적이지만 제단이나 상징물이라는 견해도 있다.'],
- hwangnyongsa:['?황룡사 구층 목탑','경상북도 경주 황룡사. 645년 선덕여왕 때 백제 장인 아비지가 지었고 높이는 약 80m로 추정된다. 1238년 몽골 침입 때 절과 함께 불타 지금은 심초석 등 터만 남았다.'],
+ hwangnyongsa:['황룡사','경상북도 경주 황룡사. 645년 선덕여왕 때 백제 장인 아비지가 지었고 높이는 약 80m로 추정된다. 1238년 몽골 침입 때 절과 함께 불타 지금은 심초석 등 터만 남았다.'],
  bulguksa:['불국사','경상북도 경주 토함산. 『삼국유사』는 751년 김대성이 불국사와 석굴암을 짓기 시작했다고 전한다. 다보탑·석가탑과 석굴암 본존불은 통일 신라 미술의 정점으로 꼽힌다. 1995년 석굴암과 함께 세계유산.'],
  borobudur:['보로부두르','인도네시아 자와섬. 9세기 샤일렌드라 왕조가 세운 거대한 불교 사원으로, 아홉 층의 단에 불상 504구와 종 모양 스투파 72기가 있다. 화산재와 밀림에 묻혀 있다가 1814년 다시 세상에 알려졌다.'],
  angkor:['앙코르 와트','캄보디아 시엠레아프. 크메르 제국의 수리야바르만 2세가 12세기 전반 비슈누에게 바쳐 지은 사원으로, 세계에서 가장 큰 종교 건축물로 꼽힌다. 캄보디아 국기에 그려져 있다.'],
@@ -352,6 +367,7 @@ for(const f of D.FIGS) f.wiki=fq(f.wiki||f.n);
 for(const k in D.GOVS) D.GOVS[k].wiki=fq(D.GOVS[k].wiki||D.GOVS[k].n);
 for(const k in D.POLICIES) D.POLICIES[k].wiki=fq(D.POLICIES[k].wiki||D.POLICIES[k].n);
 for(const k in D.DISEASES) D.DISEASES[k].wiki=fq(D.DISEASES[k].wiki||D.DISEASES[k].n);
+for(const t of D.TECH_LIST) t.wiki=fq(t.wiki||t.n);
 
 // 건물 건립 사건에 건물을 연결한다
 for(const e of D.EVENTS){ const m=/^(.+) 건립 논의$/.exec(e.t||''); if(m){ const w=D.WONDERS.find(x=>x.n===m[1]); if(w) e.wonder=w.id; } }

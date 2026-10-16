@@ -591,7 +591,7 @@ function paneTech(P){
     <div class="sub one" style="margin-top:4px">하루 연구 ${rr.toFixed(1)} · 남은 기간 약 ${left>730?(left/365).toFixed(1)+'년':Math.round(left)+'일'}</div>`:'<span class="sub">연구할 기술을 고르라. 고르지 않으면 「연구 방향」에 따라 자동으로 고른다.</span>'}</div>
   <h4>연구 방향 <span class="s">자동 선택 시 이 분야를 우선한다</span></h4>
   <div class="focus" id="focus"><button class="chip ${!P.focus?'on':''}" data-c="">균형</button>${Object.entries(D.CATS).map(([k,c])=>`<button class="chip ${P.focus===k?'on':''}" data-c="${k}">${c.n}</button>`).join('')}</div>
-  <h4>기술 계보 <span class="s">보유 ${known.size} / ${D.TECH_LIST.length} · 금테 = 지금 연구할 수 있음 · 같은 해 역사 평균 ${ENG.expectedTech(G.y)}개</span></h4>
+  <h4>기술 계보 <span class="s">보유 ${known.size} / ${D.TECH_LIST.length} · 금테 = 지금 연구할 수 있음 · 기술을 누르면 사진·해설과 연구하기 · 같은 해 역사 평균 ${ENG.expectedTech(G.y)}개</span></h4>
   <div class="treewrap"><div class="tree" style="width:${TW}px;height:${TH}px"><svg width="${TW}" height="${TH}">${lines}</svg>${eraH}${catH}${nodes}</div></div>
   <p class="sub">기술 비용은 실제 역사보다 앞선 기술일수록 크게 오르고, 이미 널리 퍼진 기술일수록 싸진다. 이웃이 아는 기술은 25% 싸다.</p>`;
 }
@@ -665,7 +665,7 @@ function bindPane(P){
   const pane=$('#pane');
   const mob=pane.querySelector('#mob'); if(mob){ mob.oninput=()=>{ ENG.act.setMob(G,+mob.value/100); pane.querySelector('#mobv').textContent=(+mob.value).toFixed(1)+'%'; }; mob.onchange=()=>{ mob.blur(); renderPane(true); }; }
   if(tab==='state'){ const L=G.hist.length; if(pane._chartsDirty||pane._chartLen!==L){ pane._chartLen=L; drawCharts(P); } }
-  pane.querySelectorAll('.tn.avail,.tn.cur').forEach(b=>b.onclick=()=>{ ENG.act.setResearch(G,b.dataset.t); renderPane(); updateTop(); });
+  pane.querySelectorAll('.tn').forEach(b=>b.onclick=()=>openLearn(learnSpec('tech',b.dataset.t)));
   const fc=pane.querySelector('#focus'); if(fc) fc.onclick=e=>{ const b=e.target.closest('.chip'); if(!b) return; ENG.act.setFocus(G,b.dataset.c||null); renderPane(); };
   const gg=pane.querySelector('#govgo'); if(gg) gg.onclick=()=>{ const v=pane.querySelector('#govsel').value; if(v===P.gov) return; if(ENG.act.setGov(G,v)) toast(`정체를 ${D.GOVS[v].n}(으)로 바꿨다.`); else toast('국고가 부족하다.'); renderPane(true); updateTop(); };
   pane.querySelectorAll('.pol button').forEach(b=>b.onclick=()=>{ const id=b.dataset.p; const on=P.policies.includes(id); if(ENG.act.togglePolicy(G,id)) toast(on?`${D.POLICIES[id].n} 폐지`:`${D.POLICIES[id].n} 시행`); else toast(P.policies.length>=D.GOVS[P.gov].slots?'제도 슬롯이 가득 찼다. 하나를 폐지하라.':'국고가 부족하다.'); renderPane(true); updateTop(); });
@@ -747,6 +747,11 @@ function learnSpec(kind,x){
   if(kind==='wonder'){ const w=D.WONDERS.find(y=>y.id===x); return w?{q:w.wiki||w.n,title:w.n,note:w.note||w.d,sub:`역사적 건물 · ${fy(w.y)}`}:null; }
   if(kind==='relic'){ const r=D.RELICS.find(y=>y.id===x); if(!r) return null; const f=D.FIGS.find(y=>y.id===r.fig); return {q:r.wiki||r.n,title:r.n,note:r.note||r.d,sub:`역사적 유물 · ${r.kind} · ${f?f.n:''} · ${fy(r.y)}`}; }
   if(kind==='fig'){ const f=D.FIGS.find(y=>y.id===x); return f?{q:f.wiki||f.n,title:f.n,note:f.x,sub:`${f.role} · ${fy(f.b)}–${fy(f.d)}`}:null; }
+  if(kind==='tech'){ const t=D.TECHS[x]; if(!t) return null; const P=G.C[G.player]; const known=P.techs.has(x), cur=P.cur===x, can=ENG.availableTechs(P).includes(x);
+    const st=known?'이미 익힌 기술':cur?'지금 연구 중':can?'지금 연구할 수 있음':`선행 기술 필요: ${t.req.filter(r=>!P.techs.has(r)).map(r=>D.TECHS[r].n).join(', ')}`;
+    return {q:t.wiki||t.n,title:t.n,sub:`기술 · ${D.CATS[t.cat].n} · 실제 등장 ${t.h<-9000?'선사 시대':fy(t.h)}`,
+      note:`${t.d} 효과: ${fxStr(t.fx)||'없음'}. ${st}.`,
+      act:can&&!cur?{t:`「${t.n}」 연구하기`,go:()=>{ ENG.act.setResearch(G,x); renderPane(true); updateTop(); toast(`${t.n} 연구를 시작했다.`); }}:null}; }
   if(kind==='gov'){ const g=D.GOVS[x]; return g?{q:g.wiki||g.n,title:g.n,note:g.note||g.d,sub:'정체'}:null; }
   if(kind==='pol'){ const p=D.POLICIES[x]; return p?{q:p.wiki||p.n,title:p.n,note:p.note||p.d,sub:`제도 · ${p.cat}`}:null; }
   if(kind==='dis'){ const d=D.DISEASES[x]; return d?{q:d.wiki||d.n,title:d.n,note:d.d,sub:'질병'}:null; }
@@ -783,9 +788,9 @@ function hydrateLearn(root){
 let learnWasOpen=false;
 function openLearn(sp){ if(!sp) return; const v=$('#learnv'); learnWasOpen=modalOpen; modalOpen=true;
   v.innerHTML=`<div class="ovl"><div class="evt" role="dialog" aria-modal="true" aria-labelledby="lv-t"><div class="hd"><div class="seal">해설</div><div><div class="when">${esc(sp.sub||'역사 사전')}</div><h2 id="lv-t">${esc(sp.title)}</h2></div></div>
-   <div class="body" style="max-width:none">${learnHTML(sp,{note:true,open:true})}</div><div class="opts"><button class="opt" id="lvx"><div class="l">닫고 게임으로 돌아가기</div></button></div></div></div>`;
+   <div class="body" style="max-width:none">${learnHTML(sp,{note:true,open:true})}</div><div class="opts">${sp.act?`<button class="opt" id="lvact"><div class="l">${esc(sp.act.t)}</div></button>`:''}<button class="opt" id="lvx"><div class="l">닫고 게임으로 돌아가기</div></button></div></div></div>`;
   hydrateLearn(v); const x=$('#lvx'); x.focus({preventScroll:true}); const close=()=>{ v.innerHTML=''; modalOpen=learnWasOpen; };
-  x.onclick=close; v.querySelector('.ovl').onclick=e=>{ if(e.target.classList.contains('ovl')) close(); }; }
+  x.onclick=close; const ab=$('#lvact'); if(ab) ab.onclick=()=>{ close(); sp.act.go(); }; v.querySelector('.ovl').onclick=e=>{ if(e.target.classList.contains('ovl')) close(); }; }
 // 연대기 항목에서 해설 찾기
 function learnFromChron(c){ const t=c.t||'';
   const mp=/^제도 시행: (.+)$/.exec(t); if(mp){ const id=Object.keys(D.POLICIES).find(k=>D.POLICIES[k].n===mp[1]); if(id) return learnSpec('pol',id); }

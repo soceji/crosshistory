@@ -59,6 +59,9 @@ const PNAME = new Array(N).fill(null);
     if(b>=0 && bd<900){ const ang=Math.atan2(PLAT[i]-PLAT[b],(PLON[i]-PLON[b])*Math.cos(PLAT[i]*Math.PI/180)); const k=Math.round(((Math.PI/2-ang)/(Math.PI*2))*8+8)%8; PNAME[i]=PNAME[b].replace(/\(.*\)/,'')+' '+dirs[k]+'방 '+ter; }
     else PNAME[i]=`${ter} 지대 (${Math.abs(PLAT[i]).toFixed(0)}°${PLAT[i]>=0?'N':'S'} ${Math.abs(PLON[i]).toFixed(0)}°${PLON[i]>=0?'E':'W'})`;
   }
+  // 역사 지명으로 고친 지방 이름
+  const RENAME={'툰드라 지대 (65°N 19°W)':'아이슬란드','안동 남서방 온대':'충주','의주 남동방 온대':'평양','국내성 북동방 온대':'강계','국내성':'삭주'};
+  for(let i=0;i<N;i++) if(RENAME[PNAME[i]]) PNAME[i]=RENAME[PNAME[i]];
 })();
 
 const PNAME_CITY=new Set(ENG._taken.keys());
@@ -140,9 +143,65 @@ function fixIslands(G,eraIdx){
   const jp={2:'HEIAN',3:'MUROMACHI',4:'JAPAN',5:'JAPAN'}[eraIdx], kr={2:'GORYEO',3:'JOSEON',4:'JOSEON',5:'ROK'}[eraIdx];
   const J=C(G,jp), K=C(G,kr);
   for(let p=0;p<N;p++){ const lo=PLON[p], la=PLAT[p];
-    const isJp=(lo>=129.6&&la>=29.5&&la<=41.6&&!(lo<130.5&&la>35))||(lo>=139.3&&la>41.6&&la<=45.7)||(lo>=129.1&&lo<=129.6&&la>=34&&la<=34.8);
+    const isJp=(lo>=129.6&&la>=(eraIdx>=4?24:29.5)&&la<=41.6&&!(lo<130.5&&la>35))||(eraIdx>=4&&lo>=122.9&&lo<131.5&&la>=24&&la<29.5)||(lo>=139.3&&la>41.6&&la<=45.7)||(lo>=129.1&&lo<=129.6&&la>=34&&la<=34.8);
     if(J&&isJp&&G.owner[p]!==J.i){ const o=G.owner[p]; if(o<0||!['RUSSIA','USSR','JURCHEN','QING','CCP','ROC','JOSEON','GORYEO','ROK','DPRK'].includes(G.C[o].tag)) G.owner[p]=J.i; }
     if(K&&lo>=126&&lo<=127.1&&la>=33&&la<=33.7) G.owner[p]=K.i; }
+}
+// 중세 이후 유럽·아시아의 공터를 채운다: 가까운 나라가 있으면 그 나라로, 너무 멀면 지역 세력을 세운다
+function isEurasia(p){ const lo=PLON[p], la=PLAT[p];
+  if(la<-11.5||la>78||lo<-25) return false;
+  if(lo>141.5&&la<43) return false;                   // 태평양 섬 (시베리아·캄차카는 포함)
+  const eu=(lo>-9.6&&lo<-1.5&&la>36)||(lo>=12&&la>=34.5); // 이베리아 남부, 시칠리아·크레타·아나톨리아 남해안
+  if(la<37.5&&lo<32.6&&!eu) return false;            // 아프리카 (북아프리카 포함)
+  if(la<12.6&&lo<52&&lo>=32.6) return false;          // 동아프리카
+  if(la<29.6&&lo>=32.6&&lo<33.6) return false;        // 이집트 동쪽 끝
+  if(la<-1&&lo>131) return false;                     // 뉴기니 동쪽
+  return true; }
+const NATIVE=[ // [서,남,동,북, 이름(중세·근세), 문화, 색]
+ [55,55,100,78,'시비르 부족','tr','#7d8a6a'],[100,50,180,78,'시베리아 퉁구스 부족','tr','#6f8a80'],
+ [-25,62,-12,67,'아이슬란드 자유국','eu','#7f95b0'],[-11,51,-5.5,55.5,'아일랜드 왕국들','eu','#5f9a6a'],[-12,58,45,72,'사미족','eu','#8fa0a8'],
+ [45,38,80,55,'킵차크 초원 부족','tr','#b09a64'],[80,40,125,55,'몽골 초원 부족','mn','#a58a5a'],[73,27,104,40,'티베트 고원 세력','tb','#a9806a'],
+ [34,12,60,32,'아랍 베두인 부족','ar','#c4a46a'],[60,24,73,38,'발루치·파슈툰 부족','ar','#a99068'],[37,40,50,44.5,'캅카스 공국들','eu','#8a7a9a'],
+ [122,24,131.5,29.5,'류큐 왕국','jp','#c48a8a'],[95,-12,141.5,21,'동남아 섬 부족','sea','#6aa58a'],[116,4,127,21,'필리핀 바랑가이','sea','#5fae9c'],[123,40,145,56,'만주 숲 부족','tr','#7a9a7a'],
+ [-12,35,45,72,'유럽 지방 세력','eu','#9a8f84'],[60,0,100,30,'인도 지방 왕국','in','#b08a5a'],[96,0,125,30,'동남아 지방 왕국','sea','#8aa070']];
+// 시대별로 따로 정해 주는 땅: [상자(서,남,동,북), 기존 태그 또는 새 나라 {tag,name,cul,col,gov}]
+const REGION_FIX={
+ 2:[[[-10.7,51.4,-5.4,55.5],{tag:'IRISH',name:'아일랜드 왕국들',cul:'eu',col:'#5f9a6a',gov:'chief'}],[[-25,63,-13,67],{tag:'ICELAND',name:'아이슬란드 자유국',cul:'eu',col:'#7f95b0',gov:'aristo'}]],
+ 3:[[[-10.7,51.4,-6.6,55.5],{tag:'IRISH',name:'아일랜드 게일 왕국들',cul:'eu',col:'#5f9a6a',gov:'feudal'}],[[-25,63,-13,67],'KALMAR']],
+ 4:[[[-25,63,-13,67],'DENMARK']],
+ 5:[[[12.9,46.4,17.2,49.0],{tag:'AUSTRIA',name:'오스트리아',cul:'eu',col:'#c0504d',gov:'republic',cap:[16.37,48.2]}],[[9.5,46.6,12.9,47.6],'AUSTRIA'],[[-10.7,51.4,-6.0,54.05],{tag:'IRELAND',name:'아일랜드',cul:'eu',col:'#4f9a5a',gov:'republic',cap:[-6.26,53.35]}],
+    [[-25,63,-13,67],{tag:'ICELAND',name:'아이슬란드',cul:'eu',col:'#7f95b0',gov:'republic'}],[[78.5,29.6,99.5,36.5],{tag:'TIBET',name:'티베트',cul:'cn',col:'#a9806a',gov:'theocracy',cap:[91.1,29.65]}],[[88,28,99.5,29.6],'TIBET']]
+};
+function regionFix(G,eraIdx,era){
+  for(const [box,t] of (REGION_FIX[eraIdx]||[])){ let c;
+    if(typeof t==='string'){ c=C(G,t); if(!c) continue; }
+    else { c=C(G,t.tag)||newCountry(G,t.tag,t.name,{gov:t.gov,cul:t.cul,col:t.col}); if(c.tl==null){ c.tl=1; c.armyMul=0.7; giveInitialTechs(G,c,era.y,era.lag[1]); } }
+    let first=-1; for(let p=0;p<N;p++) if(inBox(p,box)){ const o=G.owner[p]; if(o>=0&&o!==c.i&&G.C[o].cap===p) continue; G.owner[p]=c.i; if(first<0||PAREA[p]>PAREA[first]) first=p; }
+    if(!c.capAnchor&&typeof t!=='string'&&t.cap) c.capAnchor=t.cap; if(!c.capAnchor&&first>=0) c.capAnchor=[PLON[first],PLAT[first]]; }
+}
+function fillEurasia(G,eraIdx,era){
+  regionFix(G,eraIdx,era);
+  const lim=eraIdx>=4?1e9:650;           // 근대 이후에는 모든 땅이 어느 나라엔가 속해 있다
+  const best=new Float64Array(N).fill(1e9), who=new Int32Array(N).fill(-1); const heap=[];
+  const push=(d,p,ci)=>{ heap.push([d,p,ci]); let i=heap.length-1; while(i>0){ const pa=(i-1)>>1; if(heap[pa][0]<=heap[i][0]) break; [heap[pa],heap[i]]=[heap[i],heap[pa]]; i=pa; } };
+  const pop=()=>{ const t=heap[0], l=heap.pop(); if(heap.length){ heap[0]=l; let i=0; for(;;){ const a=2*i+1,b=a+1; let m=i; if(a<heap.length&&heap[a][0]<heap[m][0]) m=a; if(b<heap.length&&heap[b][0]<heap[m][0]) m=b; if(m===i) break; [heap[m],heap[i]]=[heap[i],heap[m]]; i=m; } } return t; };
+  for(let p=0;p<N;p++) if(G.owner[p]>=0&&isEurasia(p)){ for(const q of ADJ[p].concat(SEA[p])) if(G.owner[q]<0&&isEurasia(q)){ const sea=!ADJ[p].includes(q); const d=pdist(p,q)*(sea?1.8:1); if(d<best[q]&&d<=lim){ best[q]=d; push(d,q,G.owner[p]); } } }
+  while(heap.length){ const [d,p,ci]=pop(); if(who[p]>=0||d>best[p]) continue; who[p]=ci;
+    for(const q of ADJ[p].concat(SEA[p])){ if(G.owner[q]>=0||who[q]>=0||!isEurasia(q)) continue; const sea=!ADJ[p].includes(q); const nd=d+pdist(p,q)*(sea?1.8:1); if(nd<best[q]&&nd<=lim){ best[q]=nd; push(nd,q,ci); } } }
+  for(let p=0;p<N;p++) if(who[p]>=0) G.owner[p]=who[p];
+  // 남은 공터: 지역별 토착 세력 (같은 지역·서로 이어진 땅끼리 한 세력)
+  const regOf=p=>{ const lo=PLON[p], la=PLAT[p]; const k=NATIVE.findIndex(b=>lo>=b[0]&&la>=b[1]&&lo<=b[2]&&la<=b[3]); return k; };
+  const seen=new Uint8Array(N); let k=0;
+  for(let p=0;p<N;p++){ if(G.owner[p]>=0||seen[p]||!isEurasia(p)) continue;
+    const rg=regOf(p); const comp=[p]; seen[p]=1;
+    for(let i=0;i<comp.length;i++) for(const q of ADJ[comp[i]].concat(SEA[comp[i]])) if(!seen[q]&&G.owner[q]<0&&isEurasia(q)&&regOf(q)===rg&&pdist(q,p)<2500){ seen[q]=1; comp.push(q); }
+    const nat=rg>=0?NATIVE[rg]:null;
+    const big=comp.slice().sort((a,b)=>PAREA[b]-PAREA[a])[0];
+    const base=PNAME[big].replace(/\s.*$/,'');
+    const name=nat?nat[4]:(/지대$/.test(PNAME[big].split(' (')[0])||/^(툰드라|타이가|온대|열대|사막|초원)/.test(base)?'토착 부족':`${base} 지방 세력`);
+    const c=newCountry(G,'NAT'+(k++),name,{gov:'tribe',cul:nat?nat[5]:'eu',col:nat?nat[6]:null}); c.tl=0; c.armyMul=0.6;
+    giveInitialTechs(G,c,era.y,era.lag[0]); c.capAnchor=[PLON[big],PLAT[big]];
+    for(const q of comp) G.owner[q]=c.i; }
 }
 function fillGaps(G){
   for(const box of GAP_BOXES){
@@ -169,6 +228,7 @@ ENG.newGame = function(eraIdx, playerTag, seed){
   });
   const res = claimMulti(G, srcs, ()=>true, true);
   for(const [p,ci] of res) G.owner[p]=ci;
+  if(eraIdx>=2){ fillGaps(G); fixIslands(G,eraIdx); fillEurasia(G,eraIdx,era); }
   for(const c of G.C){ const p=nearestProv(c.capAnchor[0],c.capAnchor[1],400); c.cap = (p>=0&&G.owner[p]===c.i)?p:-1; }
   // 인구 (시작 시점 세계 인구가 실제 통계와 같도록 보정)
   G.kscale=1; let ks=0; for(let p=0;p<N;p++) ks+=Kprov(G,p);
@@ -179,7 +239,6 @@ ENG.newGame = function(eraIdx, playerTag, seed){
   G.cools=[]; G.disasters=[]; G.ce=0; G.ceR=0;
   for(let y=1850;y<G.y;y++){ const v=interpLog(D.STATS.worldPop,y)*interp(D.STATS.worldGdp,y)*interp(D.CLIMATE.fossil,y); G.ce+=v; G.ceR+=v; }
   computeTemp(G);
-  if(eraIdx>=2){ fillGaps(G); fixIslands(G,eraIdx); }
   initRoads(G); initPorts(G); initHeritage(G);
   for(const c of G.C) resetArmies(G,c);
   // 플레이어
