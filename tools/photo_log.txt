@@ -1,19 +1,24 @@
 포스코:
-  -0.05 Pohang Korea ISS020-E-09011 lrg.jpg
-  -0.10 POSCO FC 1973.jpg
-  -0.15 POSCO.jpg
-  -0.20 포스코 포항.jpg
-  -2.00 POSCO (POhang Steel Corp.) Entrance - panoramio.jpg
-  -5.25 Construction of Clark station 10.jpg
-  -5.30 Construction of Clark station 05.jpg
-  -5.35 Construction of Clark station 01.jpg
-  -5.40 Construction of Clark station 15.jpg
-  -5.45 Construction of Clark station 09.jpg
-  -5.50 Construction of Clark station 12.jpg
-  -5.55 Construction of Clark station 18.jpg
-  -5.60 Construction of Clark station 14.jpg
-  -5.65 Construction of Clark station 08.jpg
-  -5.70 Construction of Clark station 20.jpg
+  5.75 Speaker of the National Assembly Woo Won-shik visits POSCO Gwangyang Steel Mill (20240808) - 2.jpg
+  5.70 Speaker of the National Assembly Woo Won-shik visits POSCO Gwangyang Steel Mill (20240808) - 3.jpg
+  5.65 Speaker of the National Assembly Woo Won-shik visits POSCO Gwangyang Steel Mill (20240808) - 4.jpg
+  5.60 Speaker of the National Assembly Woo Won-shik visits POSCO Gwangyang Steel Mill (20240808) - 1.jpg
+  0.00 Expo 2012 Posco Pavilion3.JPG
+  -0.05 Expo 2012 Posco Pavilion5.JPG
+  -0.10 Expo 2012 Posco Pavilion4.JPG
+  -0.15 Expo 2012 Posco Pavilion2.JPG
+  -0.20 Posco CEO Kwon Oh-Joon meets PM Modi.jpg
+  -0.50 Posco intersection.JPG
+  -0.55 Posco sunset.jpg
+  -0.60 POSCOINTERNATIONAL.png
+  -0.65 포스코 포항.jpg
+  -0.70 Pohang Korea ISS020-E-09011 lrg.jpg
+  -0.75 ISS037-E-5845 - View of South Korea.jpg
+  -0.80 ISS037-E-5857 - View of South Korea.jpg
+  -0.85 ISS037-E-5848 - View of South Korea.jpg
+  -0.90 ISS037-E-5856 - View of South Korea.jpg
+  -0.95 ISS037-E-5851 - View of South Korea.jpg
+  -1.00 ISS037-E-5840 - View of South Korea.jpg
 황룡사:
   3.00 A scale model of Hwangnyongsa pagoda.jpg
   -0.10 Old Gyeongju.jpg
