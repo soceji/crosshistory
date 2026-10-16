@@ -75,8 +75,9 @@ def pick_override(q):
     for t in IMG_SEARCH.get(q, []):
         for n in commons_candidates(t):
             if n not in cands: cands.append(n)
+    order = {n: i for i, n in enumerate(cands)}
     def score(n):
-        l = n.lower(); return sum(3 for g in GOOD if g in l) - sum(5 for b in BAD_F if b in l) - cands.index(n) * 0.05
+        l = n.lower(); return sum(3 for g in GOOD if g in l) - sum(5 for b in BAD_F if b in l) - order[n] * 0.05
     cands.sort(key=score, reverse=True)
     LOG.append(q + ':\n' + '\n'.join(f'  {score(n):.2f} {n}' for n in cands[:20]))
     return cands[0] if cands and score(cands[0]) > 0 else None
