@@ -16,7 +16,7 @@ BAD = ('성교', '포르노', '성인 영화', '음란', '에피소드 목록')
 # 대표 사진 대신 지정한 사진을 쓴다: 문서 → 위키미디어 공용 검색어 (앞에서부터 차례로 시도)
 IMG_SEARCH = {
     '황룡사': ['Hwangnyongsa pagoda model', 'Hwangnyongsa nine-story wooden pagoda model', '황룡사 구층목탑 모형', 'Hwangnyongsa reconstruction'],
-    '포스코': ['POSCO Pohang Steel Works', 'Pohang Iron and Steel Works', 'POSCO Pohang steelworks aerial', '포항제철소'],
+    '포스코': ['포항제철소', 'Pohang Steelworks', 'POSCO Pohang Works', 'Pohang steel mill', 'POSCO steel plant Pohang', 'Pohang blast furnace', 'POSCO Pohang night view'],
 }
 SKIP_IMG = ('flag', 'logo', 'icon', 'symbol', 'signature', 'coat_of_arms', 'emblem', 'wiki', 'commons', 'question', 'edit', 'ambox', 'location', 'locator', 'blank', 'stub', 'disambig', 'portal')
 
@@ -63,14 +63,23 @@ def thumb(url):
         return 'data:image/jpeg;base64,' + base64.b64encode(b.getvalue()).decode()
     except Exception: return None
 
-def commons_file(term):
-    r = get('https://commons.wikimedia.org/w/api.php', params={'action': 'query', 'list': 'search', 'srnamespace': 6, 'srsearch': term, 'srlimit': 10, 'format': 'json'})
-    try:
-        for h in r.json()['query']['search']:
-            n = h['title'].split(':', 1)[-1]
-            if n.lower().endswith(('.jpg', '.jpeg', '.png')): return n
-    except Exception: pass
-    return None
+GOOD = ('steel', 'works', 'mill', 'plant', 'furnace', 'factory', 'model', 'reconstruct', '제철', '모형', '복원', 'panorama', 'aerial', 'night')
+BAD_F = ('entrance', 'logo', 'sign', 'headquarter', 'tower', 'building', 'stadium', 'museum', 'station', 'bus', 'car', 'road', 'map', 'flag', '본사', '빌딩')
+LOG = []
+def commons_candidates(term):
+    r = get('https://commons.wikimedia.org/w/api.php', params={'action': 'query', 'list': 'search', 'srnamespace': 6, 'srsearch': term, 'srlimit': 15, 'format': 'json'})
+    try: return [h['title'].split(':', 1)[-1] for h in r.json()['query']['search'] if h['title'].lower().endswith(('.jpg', '.jpeg', '.png'))]
+    except Exception: return []
+def pick_override(q):
+    cands = []
+    for t in IMG_SEARCH.get(q, []):
+        for n in commons_candidates(t):
+            if n not in cands: cands.append(n)
+    def score(n):
+        l = n.lower(); return sum(3 for g in GOOD if g in l) - sum(5 for b in BAD_F if b in l) - cands.index(n) * 0.05
+    cands.sort(key=score, reverse=True)
+    LOG.append(q + ':\n' + '\n'.join(f'  {score(n):.2f} {n}' for n in cands[:20]))
+    return cands[0] if cands and score(cands[0]) > 0 else None
 
 def lookup(q):
     sm = None
@@ -109,10 +118,7 @@ def lookup(q):
                 if not n.lower().endswith(('.jpg', '.jpeg', '.png')) or any(b in n.lower() for b in SKIP_IMG): continue
                 file = n; src = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(n)}?width=320"; break
         except Exception: pass
-    ov = None
-    for term in IMG_SEARCH.get(q, []):
-        n = commons_file(term)
-        if n: ov = n; break
+    ov = pick_override(q) if q in IMG_SEARCH else None
     if ov:
         file = ov; src = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(ov)}?width=320"
     img = thumb(src) if src else None
@@ -127,7 +133,7 @@ def main():
         except Exception: old = {}
     out = {}; miss = 0
     for n, q in enumerate(qs):
-        if q in old and old[q] and old[q].get('i') and (q not in IMG_SEARCH or old[q].get('o')):
+        if q in old and old[q] and old[q].get('i') and q not in IMG_SEARCH:
             out[q] = old[q]; continue
         try: r = lookup(q)
         except Exception as e:
@@ -137,6 +143,7 @@ def main():
         if n % 25 == 0: print(n, len(qs), q, 'ok' if r and r.get('i') else '-', flush=True)
         time.sleep(0.08)
     json.dump(out, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    open(os.path.join(ROOT, 'tools', 'photo_log.txt'), 'w', encoding='utf-8').write('\n'.join(LOG) + '\n')
     print('done', len(out), 'no image', miss, 'bytes', os.path.getsize(OUT))
 
 if __name__ == '__main__':

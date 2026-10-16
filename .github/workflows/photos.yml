@@ -24,5 +24,5 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
-          git add src/photos.json
+          git add src/photos.json tools/photo_log.txt
           git diff --cached --quiet || (git commit -m "Update Wikipedia photos" && git pull --rebase origin main && git push origin HEAD:main)
