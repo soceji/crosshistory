@@ -135,6 +135,15 @@ function claimMulti(G, srcs, allow, maxSea){
 
 // 중세 이후 동아시아(중국 본토·일본 열도)의 공터를 가까운 나라로 채운다
 const GAP_BOXES=[[97,20,123,42.5],[129.5,30.5,142.5,41.6]];
+// 중세 이후: 일본 열도(쓰시마·남쪽 섬·홋카이도 포함)는 일본, 제주도는 고려·조선·대한민국
+function fixIslands(G,eraIdx){
+  const jp={2:'HEIAN',3:'MUROMACHI',4:'JAPAN',5:'JAPAN'}[eraIdx], kr={2:'GORYEO',3:'JOSEON',4:'JOSEON',5:'ROK'}[eraIdx];
+  const J=C(G,jp), K=C(G,kr);
+  for(let p=0;p<N;p++){ const lo=PLON[p], la=PLAT[p];
+    const isJp=(lo>=129.6&&la>=29.5&&la<=41.6&&!(lo<130.5&&la>35))||(lo>=139.3&&la>41.6&&la<=45.7)||(lo>=129.1&&lo<=129.6&&la>=34&&la<=34.8);
+    if(J&&isJp&&G.owner[p]!==J.i){ const o=G.owner[p]; if(o<0||!['RUSSIA','USSR','JURCHEN','QING','CCP','ROC','JOSEON','GORYEO','ROK','DPRK'].includes(G.C[o].tag)) G.owner[p]=J.i; }
+    if(K&&lo>=126&&lo<=127.1&&la>=33&&la<=33.7) G.owner[p]=K.i; }
+}
 function fillGaps(G){
   for(const box of GAP_BOXES){
     let frontier=[]; for(let p=0;p<N;p++) if(G.owner[p]>=0&&inBox(p,box)) frontier.push(p);
@@ -165,18 +174,18 @@ ENG.newGame = function(eraIdx, playerTag, seed){
   G.kscale=1; let ks=0; for(let p=0;p<N;p++) ks+=Kprov(G,p);
   G.kscale = interpLog(D.STATS.worldPop,G.y)*headroom(G.y)/ks;
   for(let p=0;p<N;p++) G.pop[p] = Kprov(G,p)/headroom(G.y);
-  G.C.forEach(c=>{ c.inst=clamp(c.inst+[-0.08,0.08,0.3][c.tl],0.35,1.15); c.eff = era.y>=1800 ? [0.33,0.6,1][c.tl] : [0.85,0.95,1][c.tl]; recalc(G,c); c.soldiers = c.pop*0.01*c.armyMul; c.gold = c.income*0.5; autoPolicies(G,c); c.stab=1; recalc(G,c); c._rr=resRate(G,c); });
+  G.C.forEach(c=>{ c.inst=clamp(c.inst+[-0.08,0.08,0.3][c.tl],0.35,1.15); c.eff = era.y>=1800 ? [0.33,0.6,1][c.tl] : [0.85,0.95,1][c.tl]; recalc(G,c); c.soldiers = c.pop*0.0055*c.armyMul; c.gold = c.income*0.5; autoPolicies(G,c); c.stab=1; recalc(G,c); c._rr=resRate(G,c); });
   // 기후 초기값 (시작 시점까지는 실제 역사대로 배출했다고 본다)
   G.cools=[]; G.disasters=[]; G.ce=0; G.ceR=0;
   for(let y=1850;y<G.y;y++){ const v=interpLog(D.STATS.worldPop,y)*interp(D.STATS.worldGdp,y)*interp(D.CLIMATE.fossil,y); G.ce+=v; G.ceR+=v; }
   computeTemp(G);
-  if(eraIdx>=2) fillGaps(G);
+  if(eraIdx>=2){ fillGaps(G); fixIslands(G,eraIdx); }
   initRoads(G); initPorts(G); initHeritage(G);
   for(const c of G.C) resetArmies(G,c);
   // 플레이어
   const pc = playerTag ? G.C.find(c=>c.tag===playerTag) : null;
   G.player = pc ? pc.i : G.C[Math.floor(rng(G)*G.C.length)].i;
-  const P=G.C[G.player]; P.mob=0.012; P.ruler=null; ensureRuler(G,P,true);
+  const P=G.C[G.player]; P.mob=0.006; P.ruler=null; ensureRuler(G,P,true);
   // 이미 지난 사건은 건너뛴다
   const key=dkey(G.y,G.m,G.d); G.evPtr=0; while(G.evPtr<EVS.length && EVS[G.evPtr].k<key) G.evPtr++;
   // 인물: 이미 태어난 사람
@@ -233,6 +242,13 @@ function mods(G,c){
 }
 ENG.mods = mods;
 
+// 무기: 냉병기에서 화약 무기, 근대 소총, 기계화로 넘어갈 때마다 공격력·방어력이 크게 뛴다
+const WEAP=[['bronze',1.35,1.3],['iron',1.35,1.3],['stirrup',1.15,1],['crossbow',1.1,1.25],['castle',1,1.15],['gunpowder',1.1,1.05],['cannon',1.35,1.1],
+  ['firearms',2.3,2.4],['milrev',1.3,1.3],['rifle',2,2.2],['steel',1.15,1.15],['combust',1.15,1.1],['armor',1.7,1.4],['flight',1.5,1.3],['rocket',1.2,1.2],['computer',1.2,1.25],['ai',1.3,1.3]];
+function weaponFx(c){ if(c._wv===c.techs.size) return; c._wv=c.techs.size; let a=1,d=1; for(const [id,x,y] of WEAP) if(c.techs.has(id)){ a*=x; d*=y; }
+  c.wAtk=a; c.wDef=d; const k=id=>c.techs.has(id);
+  c.wLabel=k('ai')||k('computer')?'첨단 정밀 무기':k('armor')||k('flight')?'기계화 무기':k('rifle')?'근대 소총·대포':k('firearms')?'화약 무기 (화승총·화포)':k('gunpowder')?'냉병기 + 초기 화약':k('iron')?'냉병기 (철기)':k('bronze')?'냉병기 (청동기)':'석기·목기'; }
+ENG.weaponFx=weaponFx;
 function corrCost(c){ return Math.max(c.income,c.gdp*0.01)*0.12*(1+c.prov/12); }
 ENG.corrCost=corrCost;
 function sanCost(c){ return Math.max(c.income,c.gdp*0.01)*(0.3+0.25*(c.sanInv||0))*(1+c.prov/30); }
@@ -271,7 +287,7 @@ function recalc(G,c){
   c.armyMul_=1+cf+4*cf*cf; c.armyCost=c.soldiers*c.gdppc*(['tribe','chief'].includes(c.gov)?0.7:2)*c.armyMul_;
   c.expense = c.exile?0: c.income*0.42 + c.armyCost + c.policies.length*c.gdp*0.0025 + (c.sanInv>0?c.sanInv*c.gdp*0.0015:0) + (c.gold<0?-c.gold*0.08:0);
   const q = (1+s.mil)*(0.7+0.1*(c.stab+3)/2)*(1+ (c.m.mil>0?0:0));
-  c.qual=q; c.str = c.soldiers*q*(1+0.15*c.techs.size/40);
+  weaponFx(c); c.qual=q; c.str = c.soldiers*q*Math.sqrt(c.wAtk*c.wDef);
   c.slots = D.GOVS[c.gov].slots;
   return c;
 }
@@ -906,7 +922,7 @@ function sendHome(G,a,teleport){ const q=nearestOwn(G,a.o,a.p); if(q<0){ a.n=0; 
 // 전투
 function armyPow(G,a,side,b){
   const c=G.C[a.o]; const p=b.p; const t=D.WTERR[WT[p]];
-  let f=a.n*(1+Math.max(-0.5,c.m.mil))*(0.35+0.65*a.mor)*(0.4+0.6*a.sup)*(1+0.07*(a.gen.sk-3));
+  weaponFx(c); let f=a.n*(side==='att'?c.wAtk:c.wDef)*(1+Math.max(-0.5,c.m.mil))*(0.35+0.65*a.mor)*(0.4+0.6*a.sup)*(1+0.07*(a.gen.sk-3));
   if(side==='att'){ f*=t.atk; if(a.land>G.day) f*=0.35; if(stanceOf(G,a.o)==='off') f*=1.1; }
   else { f*=t.def*(1+0.12*fortLv(G,p)*(G.owner[p]===a.o?1:0)); if(G.owner[p]===a.o&&stanceOf(G,a.o)==='def') f*=1.2; }
   return f;
@@ -1043,10 +1059,10 @@ function armyAI(G,a){
   if(a.path.length){ const d=a.path[a.path.length-1].p; const o=G.owner[d]; if(o===a.o||o<0||en.includes(o)) return; }
   if(a.ret>G.day) return;
   const stance=stanceOf(G,a.o);
-  const myPow=a.n*(1+c.m.mil)*(0.35+0.65*a.mor);
+  const myPow=a.n*(c.wAtk||1)*(1+c.m.mil)*(0.35+0.65*a.mor);
   // 우리 땅에 들어온 적
   const intr=G.armies.filter(e=>en.includes(e.o)&&G.owner[e.p]===a.o&&!(e.ret>G.day));
-  if(intr.length){ intr.sort((x,y)=>pdist(x.p,a.p)-pdist(y.p,a.p)); const t=intr[0]; const ep=t.n*(1+G.C[t.o].m.mil)*(0.35+0.65*t.mor);
+  if(intr.length){ intr.sort((x,y)=>pdist(x.p,a.p)-pdist(y.p,a.p)); const t=intr[0]; const ep=t.n*(G.C[t.o].wDef||1)*(1+G.C[t.o].m.mil)*(0.35+0.65*t.mor);
     if(myPow>=ep*0.7){ orderMove(G,a,t.p); return; } if(a.home&&c.cap>=0&&a.p!==c.cap){ orderMove(G,a,c.cap); return; } }
   if(a.home&&c.cap>=0){ if(a.p!==c.cap&&!a.path.length) orderMove(G,a,c.cap); if(stance==='def'||c.prov<6) return; }
   if(stance==='def'){ // 방어: 잃은 땅을 되찾고, 국경을 지킨다
@@ -1055,7 +1071,7 @@ function armyAI(G,a){
   // 공격: 약한 적 군단이나 가까운 적 지방
   if(G.sieges[a.p]&&G.sieges[a.p].o===a.o&&!a.path.length) return;
   const foes=G.armies.filter(e=>en.includes(e.o)&&pdist(e.p,a.p)<700&&!(e.ret>G.day));
-  for(const e of foes.sort((x,y)=>pdist(x.p,a.p)-pdist(y.p,a.p))){ const ep=e.n*(1+G.C[e.o].m.mil)*(0.35+0.65*e.mor)*D.WTERR[WT[e.p]].def; if(myPow*D.WTERR[WT[e.p]].atk>ep*1.2&&passable(G,a.o,e.p)){ if(orderMove(G,a,e.p)) return; } }
+  for(const e of foes.sort((x,y)=>pdist(x.p,a.p)-pdist(y.p,a.p))){ const ep=e.n*(G.C[e.o].wDef||1)*(1+G.C[e.o].m.mil)*(0.35+0.65*e.mor)*D.WTERR[WT[e.p]].def; if(myPow*D.WTERR[WT[e.p]].atk>ep*1.2&&passable(G,a.o,e.p)){ if(orderMove(G,a,e.p)) return; } }
   let best=-1,bd=1e9; for(let p=0;p<N;p++){ const o=G.owner[p]; if(o<0||!en.includes(o)) continue; if(G.sieges[p]&&G.sieges[p].o===a.o&&G.armies.some(x=>x.p===p&&x.o===a.o&&x!==a)) continue; const d=pdist(a.p,p)*(c.cap===p?0.7:1)*(G.C[o].cap===p?0.8:1); if(d<bd){ bd=d; best=p; } }
   if(best>=0&&best!==a.p) orderMove(G,a,best);
 }
@@ -1105,7 +1121,7 @@ function opsDay(G){
 function aiMonth(G,c){
   if(c.i===G.player||!c.alive||c.exile) return;
   // 동원율
-  c.mob = (0.008 + 0.006*c.aggr + (G.wars.some(w=>w.a===c.i||w.b===c.i)?0.006:0))*(c.gold<0?0.7:1);
+  c.mob = (0.003 + 0.002*c.aggr + (G.wars.some(w=>w.a===c.i||w.b===c.i)?0.003:0))*(c.gold<0?0.7:1);
   if(c.gold<-c.income && c.policies.length>1 && rng(G)<0.1) c.policies.pop();
   // 정책
   if(c.policies.length<c.slots && rng(G)<0.05) autoPolicies(G,c);
@@ -1296,7 +1312,7 @@ function monthly(G,E){
     c._rr=resRate(G,c);
     c.gold += (c.income-c.expense)/12;
     const atWar=G.wars.some(w=>w.a===c.i||w.b===c.i);
-    const target=c.pop*c.mob*Math.max(0.2,1+c.m.manp);
+    const target=c.pop*c.mob*clamp(1+c.m.manp*0.4,0.3,1.5);
     syncSoldiers(G,c);
     manpowerMonth(G,c,target);
     if(c.gold< -3*Math.max(c.income,1)){ c.gold=0; c.stab=clamp(c.stab-1,-3,3); if(c.i===G.player) chron(G,'국가 파산','빚을 갚지 못해 채무를 탕감했다. 신용과 민심이 크게 흔들린다.','債'); }
@@ -1391,7 +1407,7 @@ ENG.act = {
   buildWonder(G,id){ const P=G.C[G.player]; const w=D.WONDERS.find(x=>x.id===id); if(!w||(w.req&&!P.techs.has(w.req))||P.gold<wonderCost(P,w)*1.2) return false; return startWonder(G,P,id,1.2); },
   investSanitation(G){ const P=G.C[G.player]; const cost=sanCost(P); if((P.sanInv||0)>=2||P.gold<cost) return false; P.gold-=cost; P.sanInv=(P.sanInv||0)+0.5; recalc(G,P); chron(G,'위생 사업',`우물과 도랑을 정비하고 의원을 늘렸다. 위생 수준 ${P.san.toFixed(1)}.`,'衛'); return true; },
   epiAction(G,id,eid){ epiAction(G,id,eid); },
-  switchTo(G,ci){ G.player=ci; const c=G.C[ci]; c.ruler=null; ensureRuler(G,c,true); c.mob=c.mob||0.012; G.gameOver=null; G.over=false; chron(G,`${c.name}으로 이어가다`,`새로운 나라의 역사를 이끈다.`,'史'); }
+  switchTo(G,ci){ G.player=ci; const c=G.C[ci]; c.ruler=null; ensureRuler(G,c,true); c.mob=c.mob||0.006; G.gameOver=null; G.over=false; chron(G,`${c.name}으로 이어가다`,`새로운 나라의 역사를 이끈다.`,'史'); }
 };
 
 // ── 지표 ──

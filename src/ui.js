@@ -367,7 +367,7 @@ function armyCard(){
   el.hidden=false;
   if(!setHTML(el,`<button class="x" id="pcx" aria-label="닫기">×</button><h3>${esc(a.name)} <span class="muted" style="font-size:13px;font-family:var(--f-body)">${esc(c.name)}</span></h3>
    <div class="own">${a.gen.fig?'★ ':''}장수 ${esc(a.gen.n)} <span class="num" style="color:var(--gold2)">${'●'.repeat(a.gen.sk)}${'○'.repeat(6-a.gen.sk)}</span></div>
-   <dl><dt>병력</dt><dd>${Math.round(a.n).toLocaleString()} / ${Math.round(a.max||a.n).toLocaleString()}명</dd><dt>소모율</dt><dd style="color:${ENG.attrition(a)>0.6?'var(--bad)':ENG.attrition(a)>0.35?'var(--warn)':'var(--good)'}">${pct(ENG.attrition(a))}${ENG.attrition(a)>0.6?' — 80%면 소멸':''}</dd><dt>사기</dt><dd>${pct(a.mor)}</dd><dt>병참 지원</dt><dd style="color:${a.sup>0.6?'var(--good)':a.sup>0.3?'var(--warn)':'var(--bad)'}">${pct(a.sup)}</dd>
+   <dl><dt>병력</dt><dd>${Math.round(a.n).toLocaleString()} / ${Math.round(a.max||a.n).toLocaleString()}명</dd><dt>소모율</dt><dd style="color:${ENG.attrition(a)>0.6?'var(--bad)':ENG.attrition(a)>0.35?'var(--warn)':'var(--good)'}">${pct(ENG.attrition(a))}${ENG.attrition(a)>0.6?' — 80%면 소멸':''}</dd><dt>무기</dt><dd style="font-family:var(--f-body)">${esc(c.wLabel||'')} · 공격 ×${(c.wAtk||1).toFixed(1)} · 방어 ×${(c.wDef||1).toFixed(1)}</dd><dt>사기</dt><dd>${pct(a.mor)}</dd><dt>병참 지원</dt><dd style="color:${a.sup>0.6?'var(--good)':a.sup>0.3?'var(--warn)':'var(--bad)'}">${pct(a.sup)}</dd>
    <dt>위치</dt><dd style="font-family:var(--f-body)">${esc(PNAME[a.p])}</dd><dt>지형</dt><dd style="font-family:var(--f-body)">${T.n} · 공격 ×${T.atk} · 방어 ×${T.def}</dd><dt>상태</dt><dd style="font-family:var(--f-body)">${status}</dd>
    ${dest>=0?`<dt>이동 진행</dt><dd><div class="bar" style="margin:4px 0 0"><i style="width:${movePct(a)*100}%"></i></div><span class="sub">${pct(movePct(a))} · 다음 지방까지 ${pct(a.prog/Math.max(0.01,a.path[0].days))}</span></dd>`:''}
    ${a.land>G.day?`<dt>상륙</dt><dd style="color:var(--bad);font-family:var(--f-body)">상륙 직후 — 공격력 ×0.35</dd>`:''}</dl>
@@ -552,11 +552,12 @@ function paneState(P){
   <h4>군대 <span class="s">인구 대비 상비 병력 비율</span></h4>
   <div class="cur" style="margin-bottom:10px"><div class="row" style="justify-content:space-between"><b>인력 <span class="num">${fmoney(P.mp||0)}</span> / ${fmoney(P.mpMax||0)}</b><span class="sub">매달 +${fmoney(P.mpGain||0)}</span></div>
    <div class="bar"><i style="width:${clamp((P.mp||0)/Math.max(1,P.mpMax||1),0,1)*100}%;background:${(P.mp||0)<(P.mpMax||1)*0.15?'var(--seal)':'#7fa7c9'}"></i></div>
-   <div class="sub one" style="margin-top:6px">상한 = 인구 × 3% × 동원력(제도·기술) · 지난달 충원 ${fmoney(P.reinf||0)}명</div>
+   <div class="sub one" style="margin-top:6px">무기: ${esc(P.wLabel||'')} · 공격 ×${(P.wAtk||1).toFixed(1)} · 방어 ×${(P.wDef||1).toFixed(1)}</div>
+   <div class="sub one">상한 = 인구 × 3% × 동원력(제도·기술) · 지난달 충원 ${fmoney(P.reinf||0)}명</div>
    <div class="sub">인력이 바닥나면 군대를 채울 수 없다. 군단은 병참 지원률만큼 빨리 충원되고, 정원의 20% 아래로 줄면(소모율 80%) 흩어진다.</div></div>
   <div class="slider"><div class="row"><span>동원율</span><b class="num" id="mobv">${(P.mob*100).toFixed(1)}%</b></div>
    <input type="range" id="mob" min="0.2" max="8" step="0.1" value="${(P.mob*100).toFixed(1)}" aria-label="동원율">
-   <div class="row sub"><span>목표 병력 ${fmoney(P.pop*P.mob*Math.max(0.2,1+P.m.manp))}명</span><span>유지비 연 ${fmoney(P.armyCost||0)}${(P.armyMul_||1)>1.05?` <b style="color:${P.armyMul_>1.6?'var(--bad)':'var(--warn)'}">(부패 ×${P.armyMul_.toFixed(2)})</b>`:''}</span></div></div>
+   <div class="row sub"><span>목표 병력 ${fmoney(P.pop*P.mob*clamp(1+P.m.manp*0.4,0.3,1.5))}명</span><span>유지비 연 ${fmoney(P.armyCost||0)}${(P.armyMul_||1)>1.05?` <b style="color:${P.armyMul_>1.6?'var(--bad)':'var(--warn)'}">(부패 ×${P.armyMul_.toFixed(2)})</b>`:''}</span></div></div>
   <h4>인구 <span class="s">${real?`우리 나라 vs ${real.n}`:'우리 나라'}</span></h4>
 <!--§--><div class="chart" id="ch1"></div><!--§-->
   <h4>세계 인구 <span class="s">당신의 세계 vs 실제 역사 (지금 ${fpop(wp)} / 실제 ${fpop(wr)})</span></h4>
@@ -756,17 +757,28 @@ function learnHTML(sp,opt){ if(!sp) return ''; opt=opt||{};
    <div class="cap"><span>${esc(sp.title)}</span><span class="src"></span></div>
    ${opt.note&&sp.note?`<div class="nt">${esc(sp.note)}</div>`:''}
    <details ${opt.open?'open':''}><summary>자세한 해설 (위키백과)</summary><div class="ex"><p class="sub">불러오는 중…</p></div></details></div>`; }
+// 게임에 함께 묶인 작은 사진 (photos.json, GitHub Actions가 위키백과에서 받아 둔다)
+let PHOTOS=null, photosP=null;
+function loadPhotos(){ if(!photosP) photosP=fetch('photos.json').then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>(PHOTOS=j||{})); return photosP; }
+function fillLearn(el,r,q){
+  const ph=el.querySelector('.ph'), src=el.querySelector('.src'), ex=el.querySelector('.ex');
+  if(r.img){ const im=new Image(); im.alt=r.title; im.onerror=()=>{ if(!el._hasImg) ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.onload=()=>{ el._hasImg=true; ph.innerHTML=''; ph.style.height=''; ph.style.padding=''; ph.appendChild(im); }; im.src=r.img;
+    src.innerHTML=r.file?`<a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(r.file)}" target="_blank" rel="noopener">사진 출처·저작권: 위키미디어 공용 ↗</a>`:''; }
+  else if(!el._hasImg) ph.innerHTML=`<div class="ld">이 문서에는 사진이 없다.</div>`;
+  const paras=(r.ext||'').split(/\n+/).filter(Boolean).slice(0,6);
+  if(paras.length||!el._hasExt){ el._hasExt=true; ex.innerHTML=(paras.map(p=>`<p>${esc(p)}</p>`).join('')||'<p class="sub">요약이 없다.</p>')+`<a class="lk" href="${r.url}" target="_blank" rel="noopener">위키백과 「${esc(r.title)}」 전문 읽기 ↗</a><div class="sub" style="margin-top:4px">해설: 한국어 위키백과 (CC BY-SA 4.0)</div>`; }
+}
 function hydrateLearn(root){
-  root.querySelectorAll('.learn[data-q]').forEach(async el=>{ const q=el.dataset.q; const r=await wikiLookup(q); if(!el.isConnected) return;
-    const ph=el.querySelector('.ph'), src=el.querySelector('.src'), ex=el.querySelector('.ex');
+  root.querySelectorAll('.learn[data-q]').forEach(async el=>{ const q=el.dataset.q;
+    await loadPhotos(); if(!el.isConnected) return;
+    const loc=PHOTOS&&PHOTOS[q]; if(loc) fillLearn(el,{title:loc.t,ext:loc.e,img:loc.i,file:loc.f,url:loc.u},q);
+    const r=await wikiLookup(q); if(!el.isConnected) return;
+    if(r&&!r.err){ fillLearn(el,r,q); return; }
+    if(loc) return;
+    const ph=el.querySelector('.ph'), ex=el.querySelector('.ex');
     const search=`${WK}/w/index.php?search=${encodeURIComponent(q.replace(/^\?/,''))}`;
-    if(!r||r.err){ ph.style.height='auto'; ph.style.padding='18px 0'; ph.innerHTML=`<div class="ld">${r&&r.err&&wikiBlocked?'이 화면의 보안 정책 때문에 사진을 불러오지 못했다.<br>아래 링크를 누르면 위키백과에서 사진과 해설을 볼 수 있다.':'위키백과에서 맞는 문서를 찾지 못했다.'}</div>`;
-      ex.innerHTML=`<a class="lk" href="${search}" target="_blank" rel="noopener">위키백과에서 「${esc(q.replace(/^\?/,''))}」 찾아보기 ↗</a>`; return; }
-    if(r.img){ const im=new Image(); im.alt=r.title; im.loading='lazy'; im.onerror=()=>{ ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.src=r.img; ph.innerHTML=''; ph.appendChild(im);
-      src.innerHTML=`<a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(r.file||'')}" target="_blank" rel="noopener">사진 출처·저작권: 위키미디어 공용 ↗</a>`; }
-    else ph.innerHTML=`<div class="ld">이 문서에는 사진이 없다.</div>`;
-    const paras=(r.ext||'').split(/\n+/).filter(Boolean).slice(0,6);
-    ex.innerHTML=(paras.map(p=>`<p>${esc(p)}</p>`).join('')||'<p class="sub">요약이 없다.</p>')+`<a class="lk" href="${r.url}" target="_blank" rel="noopener">위키백과 「${esc(r.title)}」 전문 읽기 ↗</a><div class="sub" style="margin-top:4px">해설: 한국어 위키백과 (CC BY-SA 4.0)</div>`; });
+    ph.style.height='auto'; ph.style.padding='18px 0'; ph.innerHTML=`<div class="ld">${r&&r.err&&wikiBlocked?'이 화면에서는 위키백과에 연결할 수 없어 사진을 보여 주지 못했다.<br>아래 링크를 누르면 위키백과에서 사진과 해설을 볼 수 있다.':'위키백과에서 맞는 문서를 찾지 못했다.'}</div>`;
+    ex.innerHTML=`<a class="lk" href="${search}" target="_blank" rel="noopener">위키백과에서 「${esc(q.replace(/^\?/,''))}」 찾아보기 ↗</a>`; });
 }
 let learnWasOpen=false;
 function openLearn(sp){ if(!sp) return; const v=$('#learnv'); learnWasOpen=modalOpen; modalOpen=true;
@@ -817,7 +829,7 @@ function showNext(){
     const avail=D.TACTICS.filter(x=>x.ok(ctx_)); const pick=[...avail.filter(x=>x.id!=='general').sort(()=>Math.random()-.5).slice(0,3), D.TACTICS.find(x=>x.id==='general')];
     const amph=mine.some(a=>a.land>G.day);
     showModal({glyph:'戰',when:fdate(G),title:`${PNAME[b.p]} 전투`,who:`${side==='att'?'공격':'방어'} · ${T.n} (공격 ×${T.atk}, 방어 ×${T.def})${amph?' · 상륙 직후 ×0.35':''}`,
-      body:`아군 ${Math.round(side==='att'?b.n0A:b.n0D).toLocaleString()}명 대 ${esc(e.name)} ${Math.round(side==='att'?b.n0D:b.n0A).toLocaleString()}명. 지휘관 ${esc(gen?gen.gen.n:'—')} (역량 ${gen?gen.gen.sk:'-'}/6). 어떻게 싸울 것인가?`,
+      body:`아군 ${Math.round(side==='att'?b.n0A:b.n0D).toLocaleString()}명 대 ${esc(e.name)} ${Math.round(side==='att'?b.n0D:b.n0A).toLocaleString()}명.<br>무기: 아군 ${esc(P.wLabel||'')} (${side==='att'?'공격':'방어'} ×${(side==='att'?P.wAtk:P.wDef||1).toFixed(1)}) · 적 ${esc(e.wLabel||'')} (${side==='att'?'방어':'공격'} ×${(side==='att'?e.wDef:e.wAtk||1).toFixed(1)})<br> 지휘관 ${esc(gen?gen.gen.n:'—')} (역량 ${gen?gen.gen.sk:'-'}/6). 어떻게 싸울 것인가?`,
       opts:pick.map(x=>({t:x.n,tip:`${x.d} ${x.fx==='gen'?'':x.gamble?`성공 확률 ${Math.round(x.gamble*100)}%`:`전투력 ×${x.fx}`}${x.loss&&x.loss!==1?` · 아군 손실 ×${x.loss}`:''}${x.trap?` · 이기면 적 군단 궤멸 ${Math.round(x.trap*100)}%`:''}`,go:()=>{ const r=ENG.battleTactic(G,b.id,x.id); if(r) toast(`${x.n}: ${r}`); }}))}); return; }
   if(q.kind==='epi'){ const e=(G.epi||[]).find(x=>x.id===q.id); if(!e) return; const x=D.DISEASES[e.d]; const f=ENG.epiFx(G,P,x);
     const acts=D.EPI_ACTIONS.filter(a=>!a.need||P.techs.has(a.need));
