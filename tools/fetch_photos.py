@@ -16,7 +16,7 @@ BAD = ('성교', '포르노', '성인 영화', '음란', '에피소드 목록')
 # 대표 사진 대신 지정한 사진을 쓴다: 문서 → 위키미디어 공용 검색어 (앞에서부터 차례로 시도)
 IMG_SEARCH = {
     '황룡사': ['Hwangnyongsa pagoda model', 'Hwangnyongsa nine-story wooden pagoda model', '황룡사 구층목탑 모형', 'Hwangnyongsa reconstruction'],
-    '포스코': ['POSCO', '포스코 포항', 'Pohang ISS', '포항제철소', 'Pohang Steelworks', 'POSCO Pohang Works', 'Pohang steel mill', 'POSCO steel plant Pohang', 'Pohang blast furnace', 'POSCO Pohang night view'],
+    '포스코': ['File:포스코 포항.jpg', 'File:POSCO.jpg', 'File:Pohang Korea ISS020-E-09011 lrg.jpg', '포항제철소', 'Pohang Steelworks', 'POSCO Pohang Works', 'Pohang steel mill', 'POSCO steel plant Pohang', 'Pohang blast furnace', 'POSCO Pohang night view'],
 }
 SKIP_IMG = ('flag', 'logo', 'icon', 'symbol', 'signature', 'coat_of_arms', 'emblem', 'wiki', 'commons', 'question', 'edit', 'ambox', 'location', 'locator', 'blank', 'stub', 'disambig', 'portal')
 
@@ -63,7 +63,7 @@ def thumb(url):
         return 'data:image/jpeg;base64,' + base64.b64encode(b.getvalue()).decode()
     except Exception: return None
 
-GOOD = ('steel', 'works', 'mill', 'plant', 'furnace', 'factory', 'model', 'reconstruct', '제철', '모형', '복원', 'panorama', 'aerial', 'night')
+GOOD = ('포스코 포항', 'steel', 'works', 'mill', 'plant', 'furnace', 'factory', 'model', 'reconstruct', '제철', '모형', '복원', 'panorama', 'aerial', 'night')
 BAD_F = ('entrance', 'logo', 'sign', 'headquarter', 'tower', 'building', 'stadium', 'museum', 'station', 'bus', 'car', 'road', 'map', 'flag', '본사', '빌딩')
 LOG = []
 PREVIEW = {}
@@ -76,6 +76,9 @@ def commons_candidates(term):
 def pick_override(q):
     cands = []
     for t in IMG_SEARCH.get(q, []):
+        if t.startswith('File:'):
+            if t[5:] not in cands: cands.append(t[5:])
+            continue
         for n in commons_candidates(t):
             if n not in cands: cands.append(n)
     order = {n: i for i, n in enumerate(cands)}
