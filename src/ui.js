@@ -743,7 +743,7 @@ function wikiLookup(q){
 // 무엇을 보여 줄지: {q 검색어, title 제목, note 게임 속 해설}
 function learnSpec(kind,x){
   if(!x) return null;
-  if(kind==='ev'){ if(x.relic) return learnSpec('relic',x.relic); if(x.wonder) return learnSpec('wonder',x.wonder); if(x.y>2025) return null; const q=D.WIKI_EV[x.t]||x.t; return {q,title:x.t}; }
+  if(kind==='ev'){ if(x.relic) return learnSpec('relic',x.relic); if(x.wonder) return learnSpec('wonder',x.wonder); if(x.y>2025) return null; const q=D.WIKI_EV[x.t]||x.t; if(q==='-') return null; return {q,title:x.t}; }
   if(kind==='wonder'){ const w=D.WONDERS.find(y=>y.id===x); return w?{q:w.wiki||w.n,title:w.n,note:w.note||w.d,sub:`역사적 건물 · ${fy(w.y)}`}:null; }
   if(kind==='relic'){ const r=D.RELICS.find(y=>y.id===x); if(!r) return null; const f=D.FIGS.find(y=>y.id===r.fig); return {q:r.wiki||r.n,title:r.n,note:r.note||r.d,sub:`역사적 유물 · ${r.kind} · ${f?f.n:''} · ${fy(r.y)}`}; }
   if(kind==='fig'){ const f=D.FIGS.find(y=>y.id===x); return f?{q:f.wiki||f.n,title:f.n,note:f.x,sub:`${f.role} · ${fy(f.b)}–${fy(f.d)}`}:null; }
@@ -752,7 +752,7 @@ function learnSpec(kind,x){
   if(kind==='dis'){ const d=D.DISEASES[x]; return d?{q:d.wiki||d.n,title:d.n,note:d.d,sub:'질병'}:null; }
   return null;
 }
-function learnHTML(sp,opt){ if(!sp) return ''; opt=opt||{};
+function learnHTML(sp,opt){ if(!sp||sp.q==='-') return ''; opt=opt||{};
   return `<div class="learn" data-q="${esc(sp.q)}"><div class="ph"><div class="ld">${wikiBlocked?'이 화면에서는 사진을 불러올 수 없다.':'위키백과에서 사진을 찾는 중…'}</div></div>
    <div class="cap"><span>${esc(sp.title)}</span><span class="src"></span></div>
    ${opt.note&&sp.note?`<div class="nt">${esc(sp.note)}</div>`:''}
@@ -798,7 +798,7 @@ function learnFromChron(c){ const t=c.t||'';
   return null; }
 const DOPEN=new Set(); document.addEventListener('toggle',e=>{ const d=e.target; if(d.dataset&&d.dataset.dk){ if(d.open) DOPEN.add(d.dataset.dk); else DOPEN.delete(d.dataset.dk); } },true);
 function histNote(key,note,sp,label){ return `<details class="hn" data-dk="${esc(key)}" ${DOPEN.has(key)?'open':''}><summary>${label||'역사 속에서'}</summary><p>${esc(note)}</p>${lbtn(sp)}</details>`; }
-const LMAP={}; function lbtn(sp){ if(!sp) return ''; const k=sp.q+'|'+sp.title; LMAP[k]=sp; return `<button class="lbtn" data-lr="${esc(k)}">사진·해설</button>`; }
+const LMAP={}; function lbtn(sp){ if(!sp||sp.q==='-') return ''; const k=sp.q+'|'+sp.title; LMAP[k]=sp; return `<button class="lbtn" data-lr="${esc(k)}">사진·해설</button>`; }
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-lr]'); if(!b) return; e.stopPropagation(); openLearn(LMAP[b.dataset.lr]); },true);
 
 // ── 모달 ──

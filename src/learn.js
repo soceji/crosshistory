@@ -333,6 +333,26 @@ const IN = {
 };
 for(const k in IN){ const t=D.GOVS[k]||D.POLICIES[k]; if(t){ t.wiki=IN[k][0]; t.note=IN[k][1]; } }
 
+
+// ── 검색 결과가 엉뚱한 문서로 간 것 바로잡기 ('-' = 사진·해설을 찾지 않는다) ──
+const FIX={'1876~1878년 대가뭄':'-','?4.2 킬로이어 사건':'-','?535년 536년 극단적 기상 현상':'-','?가톨릭 공동왕':'?이사벨 1세 카스티야 여왕','?고려 천리장성':'천리장성 (고려)',
+ '?군장 국가 청동기':'고인돌','?농민 징발 소집 군대':'부병제','?대한민국 저출산':'합계 출산율','?부족 연맹체':'이로쿼이 연맹','?잘랄리력':'이란력','?오스만 맘루크 전쟁 1516':'?맘루크 술탄국',
+ '?프랑스 전투 1940':'비시 프랑스','?프톨레마이오스 천문학자':'클라우디오스 프톨레마이오스','?유클리드 수학자':'에우클레이데스','?의학정전 이븐 시나':'이븐 시나','?필승 교니활자':'필승',
+ '?장형 지동의 지진계':'장형 (학자)','?청야입보 산성 고구려':'안시성 전투','?조선 콜레라 1886':'콜레라','?출산 장려 정책':'합계 출산율','?수기 대장도감 승려':'팔만대장경',
+ '?흑사병 3차 대유행':'흑사병','?히포크라테스 전집':'히포크라테스','말을 탄 사람들':'얌나야 문화','메시나 대지진':'?1908년 메시나 지진','박지원':'?박지원 연암 열하일기 실학자',
+ '이천':'?이천 조선 과학자 세종','바퀴의 발명':'바퀴','조·기장 농사':'조 (식물)','쿠와에 분화':'-','한양 지진':'-','빗살무늬토기의 확산':'빗살무늬 토기','벼농사의 전래':'벼농사',
+ '신정':'신정 정치','우아이나푸티나 분화':'-','의상':'의상 (승려)','정화':'정화 (명나라)','존 스노':'존 스노 (의사)','쿠쿠테니 거대 마을의 소멸':'쿠쿠테니-트리필리아 문화',
+ '?검역 라구사':'검역','?루돌프 표 케플러':'요하네스 케플러','?을사조약':'을사늑약','?제임스타운':'?제임스타운 버지니아 식민지','?알콰리즈미 복원과 대비의 계산':'?알콰리즈미'};
+const fq=q=>FIX[q]!=null?FIX[q]:q;
+for(const k in D.WIKI_EV) D.WIKI_EV[k]=fq(D.WIKI_EV[k]);
+for(const e of D.EVENTS) if(!D.WIKI_EV[e.t]&&FIX[e.t]!=null) D.WIKI_EV[e.t]=FIX[e.t];
+for(const w of D.WONDERS) w.wiki=fq(w.wiki||w.n);
+for(const r of D.RELICS) r.wiki=fq(r.wiki||r.n);
+for(const f of D.FIGS) f.wiki=fq(f.wiki||f.n);
+for(const k in D.GOVS) D.GOVS[k].wiki=fq(D.GOVS[k].wiki||D.GOVS[k].n);
+for(const k in D.POLICIES) D.POLICIES[k].wiki=fq(D.POLICIES[k].wiki||D.POLICIES[k].n);
+for(const k in D.DISEASES) D.DISEASES[k].wiki=fq(D.DISEASES[k].wiki||D.DISEASES[k].n);
+
 // 건물 건립 사건에 건물을 연결한다
 for(const e of D.EVENTS){ const m=/^(.+) 건립 논의$/.exec(e.t||''); if(m){ const w=D.WONDERS.find(x=>x.n===m[1]); if(w) e.wonder=w.id; } }
 })();

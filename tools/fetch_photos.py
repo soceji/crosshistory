@@ -12,6 +12,8 @@ WK = 'https://ko.wikipedia.org'
 S = requests.Session()
 S.headers['User-Agent'] = 'crosshistory-photo-fetch/1.0 (https://github.com/soceji/crosshistory; educational history game)'
 W, H, QUAL, EXT_MAX = 240, 180, 62, 900
+BAD = ('성교', '포르노', '성인 영화', '음란', '에피소드 목록')
+SKIP_IMG = ('flag', 'logo', 'icon', 'symbol', 'signature', 'coat_of_arms', 'emblem', 'wiki', 'commons', 'question', 'edit', 'ambox', 'location', 'locator', 'blank', 'stub', 'disambig', 'portal')
 
 def get(url, **kw):
     for i in range(4):
@@ -66,6 +68,7 @@ def lookup(q):
             t = search(q); sm = summary(t) if t else None
     if not sm: return None
     title = sm['title']
+    if any(b in (sm.get('extract') or '')[:300] for b in BAD) or any(b in title for b in BAD): return None
     ext = intro(title) or sm.get('extract', '')
     ext = '\n'.join(p for p in ext.split('\n') if p.strip())
     if len(ext) > EXT_MAX: ext = ext[:EXT_MAX].rsplit('.', 1)[0] + '.'
@@ -74,6 +77,24 @@ def lookup(q):
     elif sm.get('wikibase_item'):
         file = wikidata_image(sm['wikibase_item'])
         if file: src = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(file)}?width=320"
+    if not src:
+        # 대표 사진이 없으면: 영어 위키백과의 대표 사진 → 본문 첫 사진
+        try:
+            r = get(f'{WK}/w/api.php', params={'action': 'query', 'prop': 'langlinks', 'lllang': 'en', 'titles': title, 'format': 'json'})
+            en = next(iter(r.json()['query']['pages'].values()))['langlinks'][0]['*']
+            r = get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(en.replace(' ', '_'), safe='')}")
+            t = (r.json().get('thumbnail') or {}).get('source') if r and r.status_code == 200 else None
+            if t: src = t; file = urllib.parse.unquote(t.split('/')[-1]).split('px-', 1)[-1]
+        except Exception: pass
+    if not src:
+        try:
+            r = get(f'{WK}/w/api.php', params={'action': 'query', 'prop': 'images', 'imlimit': 30, 'titles': title, 'format': 'json'})
+            ims = next(iter(r.json()['query']['pages'].values())).get('images', [])
+            for im in ims:
+                n = im['title'].split(':', 1)[-1]
+                if not n.lower().endswith(('.jpg', '.jpeg', '.png')) or any(b in n.lower() for b in SKIP_IMG): continue
+                file = n; src = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(n)}?width=320"; break
+        except Exception: pass
     img = thumb(src) if src else None
     url = (sm.get('content_urls') or {}).get('desktop', {}).get('page') or f"{WK}/wiki/{urllib.parse.quote(title)}"
     return {'t': title, 'e': ext, 'i': img, 'f': file if img else None, 'u': url}

@@ -11,4 +11,4 @@ for(const f of D.FIGS) Q.add(f.wiki||f.n);
 for(const k in D.GOVS) Q.add(D.GOVS[k].wiki||D.GOVS[k].n);
 for(const k in D.POLICIES) Q.add(D.POLICIES[k].wiki||D.POLICIES[k].n);
 for(const k in D.DISEASES) Q.add(D.DISEASES[k].wiki||D.DISEASES[k].n);
-const out=[...Q].sort(); fs.writeFileSync(path.join(__dirname,'photo_queries.json'),JSON.stringify(out,null,0)+'\n'); console.log(out.length,'queries');
+Q.delete('-'); const out=[...Q].sort(); fs.writeFileSync(path.join(__dirname,'photo_queries.json'),JSON.stringify(out,null,0)+'\n'); console.log(out.length,'queries');
