@@ -32,8 +32,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .cur .row{flex-wrap:nowrap;white-space:nowrap;gap:8px}
 .cur .row>*{overflow:hidden;text-overflow:ellipsis}
 .learn{margin:12px 0 4px;border:1px solid #33404a;border-radius:6px;background:#10171c;overflow:hidden}
-.learn .ph{position:relative;height:220px;background:#0b1014;display:grid;place-items:center;color:var(--muted);font-size:12.5px}
-.learn .ph img{width:100%;height:100%;object-fit:contain;display:block}
+.learn .ph{position:relative;height:220px;overflow:hidden;background:#0b1014;display:grid;place-items:center;color:var(--muted);font-size:12.5px}
+.learn .ph .imgw{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.learn .ph .imgw img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
 .learn .ph .ld{padding:0 16px;text-align:center}
 .learn .cap{display:flex;justify-content:space-between;gap:8px;padding:6px 12px;font-size:11.5px;color:var(--muted);border-top:1px solid #222c33}
 .learn .cap a{color:var(--muted)}
@@ -5115,7 +5116,7 @@ let PHOTOS=null, photosP=null;
 function loadPhotos(){ if(!photosP) photosP=fetch('photos.json').then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>(PHOTOS=j||{})); return photosP; }
 function fillLearn(el,r,q){
   const ph=el.querySelector('.ph'), src=el.querySelector('.src'), ex=el.querySelector('.ex');
-  if(r.img){ const im=new Image(); im.alt=r.title; im.onerror=()=>{ if(!el._hasImg) ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.onload=()=>{ el._hasImg=true; ph.innerHTML=''; ph.style.height=''; ph.style.padding=''; ph.appendChild(im); }; im.src=r.img;
+  if(r.img){ const im=new Image(); im.alt=r.title; im.onerror=()=>{ if(!el._hasImg) ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.onload=()=>{ el._hasImg=true; ph.innerHTML=''; ph.style.height=''; ph.style.padding=''; const w=document.createElement('div'); w.className='imgw'; w.appendChild(im); ph.appendChild(w); }; im.src=r.img;
     src.innerHTML=r.file?`<a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(r.file)}" target="_blank" rel="noopener">사진 출처·저작권: 위키미디어 공용 ↗</a>`:''; }
   else if(!el._hasImg) ph.innerHTML=`<div class="ld">이 문서에는 사진이 없다.</div>`;
   const paras=(r.ext||'').split(/\n+/).filter(Boolean).slice(0,6);

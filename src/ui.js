@@ -762,7 +762,7 @@ let PHOTOS=null, photosP=null;
 function loadPhotos(){ if(!photosP) photosP=fetch('photos.json').then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>(PHOTOS=j||{})); return photosP; }
 function fillLearn(el,r,q){
   const ph=el.querySelector('.ph'), src=el.querySelector('.src'), ex=el.querySelector('.ex');
-  if(r.img){ const im=new Image(); im.alt=r.title; im.onerror=()=>{ if(!el._hasImg) ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.onload=()=>{ el._hasImg=true; ph.innerHTML=''; ph.style.height=''; ph.style.padding=''; ph.appendChild(im); }; im.src=r.img;
+  if(r.img){ const im=new Image(); im.alt=r.title; im.onerror=()=>{ if(!el._hasImg) ph.innerHTML=`<div class="ld">사진을 불러오지 못했다.</div>`; }; im.onload=()=>{ el._hasImg=true; ph.innerHTML=''; ph.style.height=''; ph.style.padding=''; const w=document.createElement('div'); w.className='imgw'; w.appendChild(im); ph.appendChild(w); }; im.src=r.img;
     src.innerHTML=r.file?`<a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(r.file)}" target="_blank" rel="noopener">사진 출처·저작권: 위키미디어 공용 ↗</a>`:''; }
   else if(!el._hasImg) ph.innerHTML=`<div class="ld">이 문서에는 사진이 없다.</div>`;
   const paras=(r.ext||'').split(/\n+/).filter(Boolean).slice(0,6);
