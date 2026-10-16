@@ -190,6 +190,13 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 /* 정책 */
 .pol{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:9px 11px;border:1px solid var(--line);border-radius:7px;margin-bottom:6px;background:var(--panel2)}
+.pol .hn{grid-column:1/-1}
+.hn{margin-top:6px}
+.hn summary{cursor:pointer;font-size:12px;color:var(--gold2);list-style-position:inside}
+.hn p{font-size:12.5px;line-height:1.7;color:var(--fg2);margin:6px 0}
+.hn .hl{padding:8px 0;border-top:1px solid var(--line)}
+.hn .hl p{margin:4px 0}
+.hn .hl .fx{font-size:11.5px;font-family:var(--f-mono);color:var(--muted)}
 .pol.on{border-color:var(--gold);background:#211e15}
 .pol .t{font-weight:600;font-size:13px}
 .pol .t .kr{font-size:10.5px;color:var(--seal2);border:1px solid #6b2e24;border-radius:3px;padding:0 4px;margin-left:6px;font-weight:500}
@@ -2805,6 +2812,81 @@ for(const f of D.FIGS){ if(FW[f.id]) f.wiki=FW[f.id]; }
 const DW={smallpox:'천연두',plague:'흑사병',typhoid:'장티푸스',cholera:'콜레라',measles:'홍역',typhus:'발진티푸스',flu:'인플루엔자',covid:'코로나19'};
 for(const k in D.DISEASES) D.DISEASES[k].wiki=DW[k];
 
+// ── 정체와 제도: 위키백과 문서와 해설 ──
+const IN = {
+ tribe:['?부족 연맹체','혈연으로 묶인 씨족과 부족이 필요할 때 모여 우두머리를 뽑는 느슨한 정치 체제다. 정해진 관료나 세금 제도 없이 족장 회의가 전쟁과 분쟁을 결정했다. 신석기 시대의 여러 사회와 게르만족, 북아메리카의 이로쿼이 연맹이 예다.'],
+ chief:['?군장 국가 청동기','청동기 시대에 청동 무기와 제사권을 쥔 군장(족장)이 여러 마을을 다스리던 초기 국가다. 고인돌 같은 거대한 무덤은 많은 사람을 동원할 수 있었던 군장의 힘을 보여 준다. 삼한의 신지·읍차가 다스린 소국들이 예다.'],
+ monarchy:['군주제','왕이 최고 권력을 가지되 귀족 회의와 권력을 나누는 체제다. 고대 국가 대부분이 이렇게 출발해 왕위 세습과 율령 반포로 왕권을 키웠다. 고구려 소수림왕(373)과 신라 법흥왕(520)의 율령 반포가 왕권 강화의 이정표다.'],
+ theocracy:['신정','신의 뜻을 대신 전하는 성직자나 신성한 왕이 다스리는 체제다. 고대 이집트의 파라오, 이슬람 초기의 칼리파, 중세의 교황령, 티베트의 달라이 라마가 예다. 종교가 권력의 정당성을 주므로 안정적이지만 변화에는 느리다.'],
+ feudal:['봉건제','왕이 영주에게 땅(봉토)을 주고 영주는 군사적 충성으로 보답하는 계약 관계의 체제다. 중세 유럽과 일본의 막부가 대표적이며, 주나라도 왕족과 공신에게 땅을 나눠 주었다. 지방 세력이 강해 왕권은 약하지만 지역 방어에는 유리했다.'],
+ aristo:['?귀족 공화정 원로원','왕 없이 귀족 가문들의 회의가 나라를 다스리는 체제다. 로마 공화정의 원로원과 베네치아 공화국의 대평의회가 대표적이다. 신라의 화백 회의도 귀족 합의 정치의 성격을 지녔다.'],
+ empire:['제국','황제가 여러 민족과 넓은 영토를 관료와 군대로 다스리는 체제다. 진·한, 로마, 페르시아 제국은 도로·문자·도량형을 통일해 넓은 땅을 하나로 묶었다. 영토가 넓을수록 반란과 부패를 다스리기 어렵다.'],
+ central:['중앙 집권','왕이 지방에 직접 관리를 보내 군현을 다스리는 체제로, 시험으로 뽑은 관료가 행정을 맡는다. 송나라 이후의 중국과 고려 광종 이후, 특히 조선이 대표적이다. 조선은 8도에 관찰사를, 모든 군현에 수령을 보내 지방 세력을 눌렀다.'],
+ absolut:['절대 왕정','왕이 상비군과 관료제를 쥐고 귀족과 의회의 견제 없이 다스리는 체제다. 16~18세기 유럽에서 발달했고 「짐이 곧 국가다」라고 했다는 프랑스의 루이 14세가 상징이다. 왕권신수설과 중상주의가 사상과 경제의 뒷받침이 되었다.'],
+ constmon:['입헌 군주제','헌법이 군주의 권력을 제한하고 실제 통치는 의회와 내각이 맡는 체제다. 1688년 명예혁명과 1689년 권리장전 이후의 영국이 대표적이며, 오늘날 영국·일본·스웨덴 등이 이 형태다. 대한제국은 1899년 「대한국 국제」로 오히려 황제의 전제 권력을 선포했다.'],
+ republic:['민주 공화국','주권이 국민에게 있고 국민이 뽑은 대표가 나라를 다스리는 체제다. 1776년 미국 독립과 1789년 프랑스 혁명으로 근대적 모습이 나타났다. 1919년 대한민국 임시 헌장 제1조는 「대한민국은 민주공화제로 함」이라 했고, 이 정신이 대한민국 헌법 제1조로 이어졌다.'],
+ socialist:['일당제','공산당 같은 하나의 정당이 국가와 경제를 이끄는 체제다. 1917년 러시아 혁명 뒤의 소련에서 시작해 중국·북한·베트남·쿠바 등으로 퍼졌다. 생산 수단을 국가가 소유하고 계획 경제를 운영했으며, 1989~1991년 동유럽과 소련에서 무너졌다.'],
+ junta:['군사 정권','군부가 쿠데타로 권력을 잡고 다스리는 체제다. 20세기 라틴 아메리카·아프리카·동남아시아에서 흔했고, 한국에서도 1961년 5·16 군사정변과 1979년 12·12 군사반란으로 군인들이 권력을 잡았다. 빠른 결정과 동원이 가능하지만 정당성과 인권 문제가 따른다.'],
+ exile:['망명 정부','나라를 빼앗긴 뒤 외국 땅에서 정통성을 이어 가는 정부다. 1919년 상하이에서 세워진 대한민국 임시정부가 대표적이며 27년 동안 독립운동을 이끌었다. 2차 세계 대전 때 런던에 있던 프랑스·폴란드·네덜란드의 망명 정부도 있었다.'],
+ tribute:['공납','정복하거나 복속시킨 집단에게 특산물을 바치게 하는 제도다. 고구려는 옥저와 동예에게서 소금·어물·베를 받았고, 조선에도 고을마다 특산물을 나라에 바치는 공납이 있었다. 공납은 방납의 폐단을 낳아 훗날 대동법으로 바뀌었다.'],
+ levy:['?농민 징발 소집 군대','평소 농사를 짓던 농민을 전쟁이 나면 병사로 불러 모으는 방식이다. 고대와 중세 군대 대부분이 이렇게 꾸려졌다. 병력은 많이 모을 수 있지만 훈련이 부족하고, 농사철과 겹치면 생산이 줄었다.'],
+ standing:['상비군','평시에도 늘 유지하는 직업 군대다. 로마의 군단과 조선 후기의 훈련도감이 예다. 훈련도감은 임진왜란 중인 1593년 세워져 급료를 받는 군인으로 조총·창·활을 다루는 삼수병을 길렀다.'],
+ navy:['수군','바다에서 싸우는 군대를 키우는 정책이다. 고려는 최무선의 화포로 진포 대첩(1380)에서 왜구를 물리쳤고, 조선 수군은 이순신의 지휘로 임진왜란 때 바다를 지켰다. 영국은 해군에 국력을 쏟아 19세기 바다를 지배했다.'],
+ fort:['?청야입보 산성 고구려','적이 쳐들어오면 들판의 곡식과 집을 비우고(청야) 산성으로 들어가 버티는(입보) 전략이다. 고구려가 수·당의 대군을 막은 핵심 전략이었고 안시성 전투(645)가 대표적이다. 한반도에는 수많은 산성 유적이 남아 있다.'],
+ conscript:['징병제','일정 나이의 모든 남성에게 병역 의무를 지우는 제도다. 프랑스 혁명기의 국민 총동원령(1793)에서 근대적 모습이 시작되어 나폴레옹의 대군을 낳았다. 대한민국은 1949년 병역법을 만들어 징병제를 시행하고 있다.'],
+ volunteer:['모병제','스스로 지원한 사람만 직업 군인으로 뽑는 제도다. 미국은 베트남 전쟁 뒤인 1973년 징병을 멈추고 모병제로 바꿨다. 병력은 적어도 숙련도가 높고, 그만큼 인건비가 든다.'],
+ landeq:['균전제','국가가 농민에게 일정한 토지를 나눠 주고 세금과 군역을 받는 제도다. 북위(485)에서 시작해 수·당으로 이어졌고, 이를 바탕으로 조용조 세제와 부병제가 운영되었다. 귀족의 대토지 소유가 늘며 8세기 무렵 무너졌다.'],
+ saltiron:['?염철 전매 한 무제 염철론','소금과 철의 생산과 판매를 국가가 독점하는 제도다. 한 무제가 흉노와의 전쟁 비용을 마련하려고 시행했고, 기원전 81년 이를 두고 벌인 토론이 『염철론』에 남았다. 국가 재정은 늘지만 백성의 부담과 품질 저하가 문제였다.'],
+ market:['시전','시장과 상인을 키워 상업을 진흥하는 정책이다. 조선은 한양 종로에 시전을 두었고, 16세기 이후 지방에서는 닷새마다 서는 장시가 퍼졌다. 1791년 신해통공으로 시전 상인의 독점권(금난전권)이 크게 줄어 상업이 넓어졌다.'],
+ mercant:['중상주의','수출을 늘리고 수입을 줄여 금·은을 나라에 쌓는 것이 국부라고 본 16~18세기 유럽의 경제 사상이다. 루이 14세의 재무 장관 콜베르가 대표적이다. 식민지 경쟁과 보호 무역을 낳았고 애덤 스미스가 『국부론』에서 비판했다.'],
+ freetrade:['자유 무역','관세와 무역 장벽을 낮춰 나라 사이의 교역을 자유롭게 하는 정책이다. 영국이 1846년 곡물법을 폐지하며 앞장섰고, 2차 세계 대전 뒤 GATT와 1995년 세계 무역 기구(WTO)가 이를 넓혔다. 한국의 첫 자유 무역 협정은 2004년 발효된 칠레와의 협정이다.'],
+ protect:['보호 무역','높은 관세로 외국 상품을 막아 자국 산업을 키우는 정책이다. 19세기 미국과 독일은 보호 무역으로 영국을 따라잡았다(프리드리히 리스트의 유치산업 보호론). 1930년 미국의 스무트-홀리 관세법은 세계 무역을 위축시켜 대공황을 악화시켰다.'],
+ planned:['계획 경제','국가가 무엇을 얼마나 생산하고 어떻게 나눌지를 계획으로 정하는 경제 체제다. 1928년 소련의 제1차 5개년 계획으로 시작되어 빠른 중공업화를 이뤘지만, 소비재 부족과 비효율이 쌓여 소련 해체의 한 원인이 되었다.'],
+ export:['?수출 주도 산업화','국내 시장이 작은 나라가 수출로 성장 동력을 얻는 개발 전략이다. 1960년대 이후 한국·대만·싱가포르·홍콩의 「아시아의 네 마리 용」이 대표적이다. 한국은 1964년 수출 1억 달러 달성을 기념해 「수출의 날」을 만들었다.'],
+ neolib:['신자유주의','정부 개입을 줄이고 규제 완화·민영화·노동 유연화로 시장을 키우려는 정책 흐름이다. 1980년대 영국의 대처와 미국의 레이건이 앞장섰다. 한국은 1997년 외환 위기 뒤 IMF의 요구로 구조 조정을 하며 크게 받아들였다.'],
+ greendeal:['그린 뉴딜','기후 위기에 대응해 재생 에너지와 친환경 산업에 투자하며 일자리를 만드는 정책이다. 1930년대 미국 루스벨트의 뉴딜에서 이름을 땄다. 유럽 연합은 2019년 「유럽 그린 딜」을 발표하고 2050년 탄소 중립을 목표로 삼았다.'],
+ landreform:['?대한민국 농지 개혁','지주의 땅을 사들여 실제 농사짓는 농민에게 나눠 주는 개혁이다. 대한민국은 1949년 농지 개혁법을 만들어 「경자유전」 원칙에 따라 유상 매수·유상 분배를 했다. 지주 계층이 무너지고 자작농이 늘어 교육열과 산업화의 바탕이 되었다.'],
+ caste:['신분제','태어난 혈통에 따라 사회적 지위와 직업이 정해지는 제도다. 조선은 양반·중인·상민·천민으로 나뉘었고, 인도의 카스트와 신라의 골품제도 신분제다. 조선의 신분제는 1894년 갑오개혁으로 법적으로 폐지되었다.'],
+ confu:['?조선 성리학 유교 국가','유교의 충·효·예를 통치 원리로 삼는 국가다. 조선은 성리학을 국가 이념으로 삼아 『경국대전』과 『주자가례』로 정치와 생활을 규율했다. 서원과 향약이 지방 사회를 이끌었다.'],
+ buddhism:['호국 불교','불교를 나라의 종교로 삼고 사찰이 나라의 안녕을 비는 체제다. 신라의 황룡사 9층 목탑, 고려의 팔만대장경과 연등회·팔관회가 호국 불교의 산물이다. 조선이 숭유억불 정책을 펴며 쇠퇴했다.'],
+ examp:['과거 제도','시험으로 관리를 뽑는 제도다. 수나라 문제 때 시작해 당·송에서 자리 잡았고, 고려는 958년 광종 때 쌍기의 건의로 도입했다. 조선에서는 문과·무과·잡과로 나뉘어 1894년 갑오개혁 때까지 이어졌다.'],
+ tolerance:['종교의 자유','여러 신앙을 인정하는 정책이다. 몽골 제국과 무굴 제국의 아크바르는 다양한 종교를 허용해 넓은 영토를 묶었다. 1598년 프랑스의 낭트 칙령은 개신교 신앙을 허용해 종교 전쟁을 끝냈다.'],
+ publicedu:['의무 교육','국가가 모든 아이에게 일정 기간 무상 교육을 받게 하는 제도다. 프로이센이 1763년 일찍 도입했고 19세기 후반 유럽 각국으로 퍼졌다. 대한민국은 1950년대 초등 의무 교육을 시작해 문맹률을 빠르게 낮췄다.'],
+ suffrage:['보통 선거','재산·성별·신분과 상관없이 일정 나이 이상의 모든 국민에게 투표권을 주는 제도다. 1893년 뉴질랜드가 처음 여성 참정권을 인정했다. 대한민국은 1948년 5·10 총선거에서 처음부터 남녀 보통 선거를 실시했다.'],
+ abolish:['노예제 폐지','사람을 사고파는 노비·노예 제도를 없애는 일이다. 조선은 1801년 공노비 6만여 명을 해방했고 1894년 갑오개혁으로 노비제를 폐지했다. 영국은 1833년, 미국은 남북 전쟁 뒤 1865년 수정 헌법 13조로 노예제를 폐지했다.'],
+ welfarep:['복지 국가','국가가 건강 보험·연금·실업 급여로 모든 국민의 생활을 보장하는 제도다. 독일 비스마르크의 사회 보험(1880년대)에서 시작해, 영국의 베버리지 보고서(1942)가 「요람에서 무덤까지」의 복지 국가를 설계했다. 한국은 1989년 전 국민 의료 보험을 이뤘다.'],
+ natal:['?출산 장려 정책','아동 수당·육아 휴직·주거 지원으로 출산을 늘리려는 정책이다. 프랑스와 스웨덴은 오랜 가족 정책으로 출산율을 비교적 높게 유지했다. 한국은 1960~80년대 출산 억제 정책을 폈다가 2006년부터 저출산 대책으로 방향을 바꿨지만, 2023년 합계출산율은 0.72까지 떨어졌다.'],
+ audit:['어사대','관리의 비리를 감찰하는 독립 기관이다. 진·한의 어사대부와 당의 어사대에서 비롯되었고 고려에도 어사대가 있었다. 조선에서는 사헌부가 관리를 감찰하고 사간원과 함께 왕에게 바른말을 올렸다.'],
+ salary:['녹봉','관리에게 충분한 봉급을 주어 뇌물의 유혹을 줄이는 정책이다. 송나라는 관리의 봉급을 높여 청렴을 꾀했다. 조선의 관리들은 녹봉이 적어 지방 수령의 수탈이 문제였고, 정약용은 『목민심서』에서 이를 비판했다.'],
+ amhaeng:['암행어사','조선의 왕이 몰래 지방에 보내 수령의 비리와 백성의 형편을 살피게 한 관리다. 마패와 유척(놋쇠 자)을 지니고 「암행어사 출두요」를 외치며 관아에 들이닥쳤다. 박문수가 유명하고 『춘향전』의 이몽룡도 암행어사다.'],
+ pressfree:['언론의 자유','정부의 검열 없이 생각과 사실을 말하고 보도할 수 있는 권리다. 1791년 미국 수정 헌법 1조가 이를 명문화했다. 한국 최초의 근대 신문은 1883년 『한성순보』, 최초의 민간 한글 신문은 1896년 서재필의 『독립신문』이다.'],
+ censor:['검열','정부가 출판·언론·사상을 감시하고 금지하는 정책이다. 진시황의 분서갱유, 가톨릭의 금서 목록, 20세기 독재 국가의 검열이 예다. 일제 강점기에는 치안 유지법(1925)으로 독립운동가와 사상가를 탄압했다.'],
+ openness:['?개방 정책 개혁 개방','외국과 교류하고 새로운 문물을 받아들이는 정책이다. 일본의 메이지 유신(1868)과 중국의 개혁 개방(1978)이 대표적이다. 조선에서는 박지원·박제가 같은 북학파가 청의 문물을 배우자고 주장했다.'],
+ beomgeum:['?범금팔조 고조선 8조법','고조선의 법으로 『한서』 지리지에 세 조목이 전한다. 사람을 죽인 자는 사형, 남을 다치게 한 자는 곡식으로 갚고, 도둑질한 자는 노비로 삼되 속죄하려면 50만 전을 내야 했다. 생명과 재산, 신분 질서를 중시한 사회였음을 보여 준다.'],
+ jindae:['진대법','194년 고구려 고국천왕 때 재상 을파소의 건의로 시행한 빈민 구제 제도다. 봄 춘궁기에 나라 곡식을 빌려주고 가을 추수 뒤에 갚게 했다. 고려의 의창, 조선의 환곡으로 이어졌다.'],
+ hwarang:['화랑','신라 진흥왕 때 제도로 정비된 청소년 수련 단체다. 원광 법사의 세속오계(사군이충·사친이효·교우이신·임전무퇴·살생유택)를 따랐다. 김유신·관창 같은 화랑이 삼국 통일 전쟁에서 활약했다.'],
+ golpum:['골품제','신라의 신분 제도로 성골·진골과 6두품 이하의 두품으로 나뉘었다. 골품에 따라 오를 수 있는 관직과 집의 크기, 옷 색깔까지 정해졌다. 최치원 같은 6두품 지식인의 불만이 신라 말 사회 변동의 한 원인이 되었다.'],
+ hwabaek:['화백 회의','신라의 진골 귀족들이 모여 나라의 중대사를 만장일치로 결정한 회의다. 상대등이 회의를 이끌었고 왕위 계승이나 전쟁 같은 일을 다뤘다. 귀족의 힘을 보여 주는 동시에 왕권을 견제했다.'],
+ jeonsigwa:['전시과','고려의 토지 제도로, 관리에게 등급에 따라 농토(전지)와 땔감을 얻는 땅(시지)의 수조권을 나눠 주었다. 976년 경종 때 시작해 1076년 문종 때 경정 전시과로 완성되었다. 무신 정변 뒤 무너지고 과전법으로 바뀌었다.'],
+ byeolmu:['별무반','1104년 고려 숙종 때 윤관의 건의로 만든 특수 부대다. 기병인 신기군, 보병인 신보군, 승병인 항마군으로 이루어졌다. 1107년 여진을 정벌하고 동북 9성을 쌓았다.'],
+ gwajeon:['과전법','1391년 이성계와 신진 사대부가 만든 토지 제도다. 권문세족의 대농장을 몰수하고 경기 지역 토지의 수조권을 관리에게 나눠 주었다. 조선 건국의 경제적 기반이 되었고 1466년 직전법으로 바뀌었다.'],
+ daedong:['대동법','지역 특산물로 바치던 공납을 토지 1결당 쌀 12두 등으로 통일해 땅을 가진 만큼 내게 한 제도다. 1608년 광해군 때 경기도에서 시작해 1708년 전국으로 확대되었다. 방납의 폐단을 줄였고, 관청에 물품을 대는 공인이 등장해 상공업이 발달했다.'],
+ gyunyeok:['균역법','1750년 영조가 양인 장정이 내던 군포를 2필에서 1필로 줄인 제도다. 모자라는 재정은 결작(토지 1결당 쌀 2두), 어장세·염세·선박세, 선무군관포로 메웠다.'],
+ tangpyeong:['탕평책','붕당 사이의 다툼을 누르고 인재를 고르게 쓰려 한 영조와 정조의 정책이다. 영조는 1742년 성균관 앞에 탕평비를 세웠고, 정조는 규장각을 세워 인재를 길렀다. 『서경』의 「무편무당 왕도탕탕」에서 이름을 땄다.'],
+ hangul:['훈민정음','1443년 세종이 만들고 1446년 반포한 문자다. 자음은 소리 내는 기관의 모양을, 모음은 하늘(ㆍ)·땅(ㅡ)·사람(ㅣ)을 본떴다. 「어리석은 백성이 쉽게 익혀 날마다 쓰게 하고자 한다」는 뜻으로 만들었다.'],
+ fiveyear:['?경제 개발 5개년 계획 대한민국','1962년부터 1996년까지 대한민국 정부가 일곱 차례 추진한 경제 개발 계획이다. 1차에는 경공업과 수출, 3·4차에는 중화학 공업을 키웠다. 1인당 국민 소득은 1962년 100달러 남짓에서 1990년대 중반 1만 달러를 넘었다.'],
+ saemaul:['새마을 운동','1970년 박정희 정부가 시작한 농촌 근대화 운동이다. 근면·자조·협동을 내걸고 지붕 개량, 마을 길 넓히기, 전기 보급을 추진했다. 2013년 새마을 운동 기록물이 세계기록유산에 올랐다.'],
+ heavychem:['?중화학공업화 선언 1973','1973년 정부가 중화학 공업화를 선언하고 철강·조선·기계·전자·화학·비철 금속에 집중 투자했다. 포항제철, 울산 조선소, 창원 기계 공업 기지, 여수 석유 화학 단지가 이때 세워지거나 커졌다.'],
+ juche:['주체사상','김일성이 내세운 북한의 통치 이념으로 사상의 주체, 정치의 자주, 경제의 자립, 국방의 자위를 내걸었다. 1972년 헌법에 명시되었다. 실제로는 수령 중심의 유일 체제를 정당화하는 데 쓰였다.'],
+ songun:['선군정치','1990년대 중반 김정일이 내세운 군 우선 정책이다. 고난의 행군 시기 군을 체제 유지의 중심에 두고 자원을 군에 먼저 나눴다. 핵과 미사일 개발로 이어졌다.'],
+ publichealth:['공중 보건','국가가 깨끗한 물, 시장 위생, 전염병 격리를 관리하는 제도다. 근대적 공중 보건은 1848년 영국의 공중 보건법에서 시작되었다. 조선에서는 1880년대 개화파가 위생을 근대화의 핵심 과제로 꼽았다.'],
+ hyeminseo:['혜민서','조선 시대에 백성의 병을 치료하고 약을 팔던 기관이 혜민서이고, 도성 밖에서 역병 환자와 굶주린 사람을 돌보던 곳이 동·서 활인서다. 고려의 혜민국과 동서대비원을 이었다.'],
+ quarantine:['검역','전염병이 도는 곳에서 온 배와 사람을 일정 기간 격리하는 제도다. 1377년 라구사(지금의 두브로브니크)가 30일 격리를 시작했고, 베네치아 등에서 40일로 늘었다. 이탈리아어로 40을 뜻하는 콰란타(quaranta)에서 quarantine이라는 말이 나왔다.'],
+ sewer:['하수도','깨끗한 물을 대고 오수를 따로 흘려보내는 시설이다. 1858년 런던의 「대악취」 뒤 조지프 배절제트가 만든 하수도망이 콜레라를 크게 줄였다. 한국 최초의 근대 상수도는 1908년 서울 뚝도 정수장이다.'],
+ vaccination:['예방 접종','국가가 아이들에게 무료로 백신을 맞히는 제도다. 제너의 종두법(1796) 이후 각국이 천연두 접종을 의무로 했고, 조선에서는 지석영이 1879년부터 종두법을 보급했다. 세계적인 접종 운동으로 천연두는 1980년 근절되었다.']
+};
+for(const k in IN){ const t=D.GOVS[k]||D.POLICIES[k]; if(t){ t.wiki=IN[k][0]; t.note=IN[k][1]; } }
+
 // 건물 건립 사건에 건물을 연결한다
 for(const e of D.EVENTS){ const m=/^(.+) 건립 논의$/.exec(e.t||''); if(m){ const w=D.WONDERS.find(x=>x.n===m[1]); if(w) e.wonder=w.id; } }
 })();
@@ -4838,13 +4920,17 @@ function paneInst(P){
   const locked=all.length-pols.length;
   return `
   <h4>정체 <span class="s">바꾸면 안정도 −1.5, 반년치 수입이 든다</span></h4>
-  <div class="cur"><div class="serif" style="font-weight:700;font-size:16px">${esc(D.GOVS[P.gov].n)}</div><div class="sub">${esc(D.GOVS[P.gov].d)}</div><div class="sub">${esc(fxStr(D.GOVS[P.gov].fx))} · 제도 슬롯 ${slots}</div>
-   <div class="row" style="margin-top:8px"><select id="govsel" aria-label="정체 선택">${govs.map(g=>`<option value="${g}" ${g===P.gov?'selected':''}>${esc(D.GOVS[g].n)}</option>`).join('')}</select><button class="btn" id="govgo" style="flex:none">바꾸기 <small>${fmoney(P.income*0.5)}</small></button></div></div>
+  <div class="cur"><div class="serif" style="font-weight:700;font-size:16px">${esc(D.GOVS[P.gov].n)}${lbtn(learnSpec('gov',P.gov))}</div><div class="sub">${esc(D.GOVS[P.gov].d)}</div><div class="sub">${esc(fxStr(D.GOVS[P.gov].fx))} · 제도 슬롯 ${slots}</div>
+   ${D.GOVS[P.gov].note?histNote('gov:'+P.gov,D.GOVS[P.gov].note,learnSpec('gov',P.gov)):''}
+   <div class="row" style="margin-top:8px"><select id="govsel" aria-label="정체 선택">${govs.map(g=>`<option value="${g}" ${g===P.gov?'selected':''}>${esc(D.GOVS[g].n)}</option>`).join('')}</select><button class="btn" id="govgo" style="flex:none">바꾸기 <small>${fmoney(P.income*0.5)}</small></button></div>
+   ${govs.filter(g=>g!==P.gov).length?`<details class="hn" data-dk="govlist" ${DOPEN.has('govlist')?'open':''}><summary>고를 수 있는 다른 정체 ${govs.filter(g=>g!==P.gov).length}가지 알아보기</summary>${govs.filter(g=>g!==P.gov).map(g=>`<div class="hl"><b>${esc(D.GOVS[g].n)}</b>${lbtn(learnSpec('gov',g))}<p>${esc(D.GOVS[g].note||D.GOVS[g].d)}</p><div class="fx">${esc(fxStr(D.GOVS[g].fx))} · 제도 슬롯 ${D.GOVS[g].slots}</div></div>`).join('')}</details>`:''}</div>
   <h4>제도와 경제 정책 <span class="slots">${Array.from({length:slots},(_,i)=>`<i class="${i<P.policies.length?'f':''}"></i>`).join('')}</span> <span class="s">${P.policies.length}/${slots} · 시행 비용 수입의 15%</span></h4>
   ${cats.map(cat=>{ const list=pols.filter(id=>D.POLICIES[id].cat===cat).sort((a,b)=>(P.policies.includes(b)-P.policies.includes(a))||((D.POLICIES[b].tags?1:0)-(D.POLICIES[a].tags?1:0)));
     if(!list.length) return ''; return `<div class="sub" style="margin:12px 0 6px;letter-spacing:.06em">${cat}</div>`+list.map(id=>{ const p=D.POLICIES[id]; const on=P.policies.includes(id);
-      return `<div class="pol ${on?'on':''}"><div class="t">${esc(p.n)}${p.tags||p.flag?'<span class="kr">고유</span>':''}</div><div class="d">${esc(p.d)}</div><div class="fx">${esc(fxStr(p.fx))}</div><button data-p="${id}">${on?'폐지':'시행'}</button></div>`; }).join(''); }).join('')}
-  <p class="sub">아직 조건이 맞지 않는 제도 ${locked}개가 있다. 기술을 익히거나 특정 국가·시대가 되면 열린다.</p>`;
+      return `<div class="pol ${on?'on':''}"><div class="t">${esc(p.n)}${p.tags||p.flag?'<span class="kr">고유</span>':''}</div><div class="d">${esc(p.d)}</div><div class="fx">${esc(fxStr(p.fx))}</div><button data-p="${id}">${on?'폐지':'시행'}</button>${p.note?histNote('pol:'+id,p.note,learnSpec('pol',id)):''}</div>`; }).join(''); }).join('')}
+  <p class="sub">아직 조건이 맞지 않는 제도 ${locked}개가 있다. 기술을 익히거나 특정 국가·시대가 되면 열린다.</p>
+  ${locked?`<details class="hn" data-dk="locked" ${DOPEN.has('locked')?'open':''}><summary>아직 열리지 않은 제도 ${locked}개 알아보기</summary>${all.filter(id=>!pols.includes(id)).map(id=>{ const p=D.POLICIES[id]; const need=[p.req?(D.TECHS[p.req]?`기술 「${D.TECHS[p.req].n}」`:D.GOVS[p.req]?`정체 「${D.GOVS[p.req].n}」`:''):'',p.tags?p.tags.map(t=>{ const c=G.C[G.tag[t]]; return c?c.name:t; }).join('·')+' 고유':'',p.y?`${fy(p.y[0])}~${fy(p.y[1])}`:''].filter(Boolean).join(' · ');
+    return `<div class="hl"><b>${esc(p.n)}</b> <span class="sub">${esc(p.cat)}${need?' · 조건: '+esc(need):''}</span>${lbtn(learnSpec('pol',id))}<p>${esc(p.note||p.d)}</p></div>`; }).join('')}</details>`:''}`;
 }
 function paneDip(P){
   const wars=G.wars.filter(w=>w.a===G.player||w.b===G.player);
@@ -4977,6 +5063,8 @@ function learnSpec(kind,x){
   if(kind==='wonder'){ const w=D.WONDERS.find(y=>y.id===x); return w?{q:w.wiki||w.n,title:w.n,note:w.note||w.d,sub:`역사적 건물 · ${fy(w.y)}`}:null; }
   if(kind==='relic'){ const r=D.RELICS.find(y=>y.id===x); if(!r) return null; const f=D.FIGS.find(y=>y.id===r.fig); return {q:r.wiki||r.n,title:r.n,note:r.note||r.d,sub:`역사적 유물 · ${r.kind} · ${f?f.n:''} · ${fy(r.y)}`}; }
   if(kind==='fig'){ const f=D.FIGS.find(y=>y.id===x); return f?{q:f.wiki||f.n,title:f.n,note:f.x,sub:`${f.role} · ${fy(f.b)}–${fy(f.d)}`}:null; }
+  if(kind==='gov'){ const g=D.GOVS[x]; return g?{q:g.wiki||g.n,title:g.n,note:g.note||g.d,sub:'정체'}:null; }
+  if(kind==='pol'){ const p=D.POLICIES[x]; return p?{q:p.wiki||p.n,title:p.n,note:p.note||p.d,sub:`제도 · ${p.cat}`}:null; }
   if(kind==='dis'){ const d=D.DISEASES[x]; return d?{q:d.wiki||d.n,title:d.n,note:d.d,sub:'질병'}:null; }
   return null;
 }
@@ -5005,12 +5093,16 @@ function openLearn(sp){ if(!sp) return; const v=$('#learnv'); learnWasOpen=modal
   x.onclick=close; v.querySelector('.ovl').onclick=e=>{ if(e.target.classList.contains('ovl')) close(); }; }
 // 연대기 항목에서 해설 찾기
 function learnFromChron(c){ const t=c.t||'';
+  const mp=/^제도 시행: (.+)$/.exec(t); if(mp){ const id=Object.keys(D.POLICIES).find(k=>D.POLICIES[k].n===mp[1]); if(id) return learnSpec('pol',id); }
+  const mg=/^정체 변경: (.+)$/.exec(t); if(mg){ const id=Object.keys(D.GOVS).find(k=>D.GOVS[k].n===mg[1]); if(id) return learnSpec('gov',id); }
   const ev=ENG.EVS.find(e=>e.t===t); if(ev){ const sp=learnSpec('ev',ev); if(sp) return sp; }
   const m=/「(.+?)」/.exec(t); if(m){ const r=D.RELICS.find(x=>x.n===m[1]); if(r) return learnSpec('relic',r.id); }
   const w=D.WONDERS.find(x=>t.startsWith(x.n)); if(w) return learnSpec('wonder',w.id);
   const f=D.FIGS.find(x=>t.startsWith(x.n+' ')||t.startsWith(x.n+',')); if(f) return learnSpec('fig',f.id);
   const d=Object.keys(D.DISEASES).find(k=>t.startsWith(D.DISEASES[k].n)); if(d) return learnSpec('dis',d);
   return null; }
+const DOPEN=new Set(); document.addEventListener('toggle',e=>{ const d=e.target; if(d.dataset&&d.dataset.dk){ if(d.open) DOPEN.add(d.dataset.dk); else DOPEN.delete(d.dataset.dk); } },true);
+function histNote(key,note,sp,label){ return `<details class="hn" data-dk="${esc(key)}" ${DOPEN.has(key)?'open':''}><summary>${label||'역사 속에서'}</summary><p>${esc(note)}</p>${lbtn(sp)}</details>`; }
 const LMAP={}; function lbtn(sp){ if(!sp) return ''; const k=sp.q+'|'+sp.title; LMAP[k]=sp; return `<button class="lbtn" data-lr="${esc(k)}">사진·해설</button>`; }
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-lr]'); if(!b) return; e.stopPropagation(); openLearn(LMAP[b.dataset.lr]); },true);
 

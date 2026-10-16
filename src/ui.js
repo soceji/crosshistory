@@ -603,13 +603,17 @@ function paneInst(P){
   const locked=all.length-pols.length;
   return `
   <h4>정체 <span class="s">바꾸면 안정도 −1.5, 반년치 수입이 든다</span></h4>
-  <div class="cur"><div class="serif" style="font-weight:700;font-size:16px">${esc(D.GOVS[P.gov].n)}</div><div class="sub">${esc(D.GOVS[P.gov].d)}</div><div class="sub">${esc(fxStr(D.GOVS[P.gov].fx))} · 제도 슬롯 ${slots}</div>
-   <div class="row" style="margin-top:8px"><select id="govsel" aria-label="정체 선택">${govs.map(g=>`<option value="${g}" ${g===P.gov?'selected':''}>${esc(D.GOVS[g].n)}</option>`).join('')}</select><button class="btn" id="govgo" style="flex:none">바꾸기 <small>${fmoney(P.income*0.5)}</small></button></div></div>
+  <div class="cur"><div class="serif" style="font-weight:700;font-size:16px">${esc(D.GOVS[P.gov].n)}${lbtn(learnSpec('gov',P.gov))}</div><div class="sub">${esc(D.GOVS[P.gov].d)}</div><div class="sub">${esc(fxStr(D.GOVS[P.gov].fx))} · 제도 슬롯 ${slots}</div>
+   ${D.GOVS[P.gov].note?histNote('gov:'+P.gov,D.GOVS[P.gov].note,learnSpec('gov',P.gov)):''}
+   <div class="row" style="margin-top:8px"><select id="govsel" aria-label="정체 선택">${govs.map(g=>`<option value="${g}" ${g===P.gov?'selected':''}>${esc(D.GOVS[g].n)}</option>`).join('')}</select><button class="btn" id="govgo" style="flex:none">바꾸기 <small>${fmoney(P.income*0.5)}</small></button></div>
+   ${govs.filter(g=>g!==P.gov).length?`<details class="hn" data-dk="govlist" ${DOPEN.has('govlist')?'open':''}><summary>고를 수 있는 다른 정체 ${govs.filter(g=>g!==P.gov).length}가지 알아보기</summary>${govs.filter(g=>g!==P.gov).map(g=>`<div class="hl"><b>${esc(D.GOVS[g].n)}</b>${lbtn(learnSpec('gov',g))}<p>${esc(D.GOVS[g].note||D.GOVS[g].d)}</p><div class="fx">${esc(fxStr(D.GOVS[g].fx))} · 제도 슬롯 ${D.GOVS[g].slots}</div></div>`).join('')}</details>`:''}</div>
   <h4>제도와 경제 정책 <span class="slots">${Array.from({length:slots},(_,i)=>`<i class="${i<P.policies.length?'f':''}"></i>`).join('')}</span> <span class="s">${P.policies.length}/${slots} · 시행 비용 수입의 15%</span></h4>
   ${cats.map(cat=>{ const list=pols.filter(id=>D.POLICIES[id].cat===cat).sort((a,b)=>(P.policies.includes(b)-P.policies.includes(a))||((D.POLICIES[b].tags?1:0)-(D.POLICIES[a].tags?1:0)));
     if(!list.length) return ''; return `<div class="sub" style="margin:12px 0 6px;letter-spacing:.06em">${cat}</div>`+list.map(id=>{ const p=D.POLICIES[id]; const on=P.policies.includes(id);
-      return `<div class="pol ${on?'on':''}"><div class="t">${esc(p.n)}${p.tags||p.flag?'<span class="kr">고유</span>':''}</div><div class="d">${esc(p.d)}</div><div class="fx">${esc(fxStr(p.fx))}</div><button data-p="${id}">${on?'폐지':'시행'}</button></div>`; }).join(''); }).join('')}
-  <p class="sub">아직 조건이 맞지 않는 제도 ${locked}개가 있다. 기술을 익히거나 특정 국가·시대가 되면 열린다.</p>`;
+      return `<div class="pol ${on?'on':''}"><div class="t">${esc(p.n)}${p.tags||p.flag?'<span class="kr">고유</span>':''}</div><div class="d">${esc(p.d)}</div><div class="fx">${esc(fxStr(p.fx))}</div><button data-p="${id}">${on?'폐지':'시행'}</button>${p.note?histNote('pol:'+id,p.note,learnSpec('pol',id)):''}</div>`; }).join(''); }).join('')}
+  <p class="sub">아직 조건이 맞지 않는 제도 ${locked}개가 있다. 기술을 익히거나 특정 국가·시대가 되면 열린다.</p>
+  ${locked?`<details class="hn" data-dk="locked" ${DOPEN.has('locked')?'open':''}><summary>아직 열리지 않은 제도 ${locked}개 알아보기</summary>${all.filter(id=>!pols.includes(id)).map(id=>{ const p=D.POLICIES[id]; const need=[p.req?(D.TECHS[p.req]?`기술 「${D.TECHS[p.req].n}」`:D.GOVS[p.req]?`정체 「${D.GOVS[p.req].n}」`:''):'',p.tags?p.tags.map(t=>{ const c=G.C[G.tag[t]]; return c?c.name:t; }).join('·')+' 고유':'',p.y?`${fy(p.y[0])}~${fy(p.y[1])}`:''].filter(Boolean).join(' · ');
+    return `<div class="hl"><b>${esc(p.n)}</b> <span class="sub">${esc(p.cat)}${need?' · 조건: '+esc(need):''}</span>${lbtn(learnSpec('pol',id))}<p>${esc(p.note||p.d)}</p></div>`; }).join('')}</details>`:''}`;
 }
 function paneDip(P){
   const wars=G.wars.filter(w=>w.a===G.player||w.b===G.player);
@@ -742,6 +746,8 @@ function learnSpec(kind,x){
   if(kind==='wonder'){ const w=D.WONDERS.find(y=>y.id===x); return w?{q:w.wiki||w.n,title:w.n,note:w.note||w.d,sub:`역사적 건물 · ${fy(w.y)}`}:null; }
   if(kind==='relic'){ const r=D.RELICS.find(y=>y.id===x); if(!r) return null; const f=D.FIGS.find(y=>y.id===r.fig); return {q:r.wiki||r.n,title:r.n,note:r.note||r.d,sub:`역사적 유물 · ${r.kind} · ${f?f.n:''} · ${fy(r.y)}`}; }
   if(kind==='fig'){ const f=D.FIGS.find(y=>y.id===x); return f?{q:f.wiki||f.n,title:f.n,note:f.x,sub:`${f.role} · ${fy(f.b)}–${fy(f.d)}`}:null; }
+  if(kind==='gov'){ const g=D.GOVS[x]; return g?{q:g.wiki||g.n,title:g.n,note:g.note||g.d,sub:'정체'}:null; }
+  if(kind==='pol'){ const p=D.POLICIES[x]; return p?{q:p.wiki||p.n,title:p.n,note:p.note||p.d,sub:`제도 · ${p.cat}`}:null; }
   if(kind==='dis'){ const d=D.DISEASES[x]; return d?{q:d.wiki||d.n,title:d.n,note:d.d,sub:'질병'}:null; }
   return null;
 }
@@ -770,12 +776,16 @@ function openLearn(sp){ if(!sp) return; const v=$('#learnv'); learnWasOpen=modal
   x.onclick=close; v.querySelector('.ovl').onclick=e=>{ if(e.target.classList.contains('ovl')) close(); }; }
 // 연대기 항목에서 해설 찾기
 function learnFromChron(c){ const t=c.t||'';
+  const mp=/^제도 시행: (.+)$/.exec(t); if(mp){ const id=Object.keys(D.POLICIES).find(k=>D.POLICIES[k].n===mp[1]); if(id) return learnSpec('pol',id); }
+  const mg=/^정체 변경: (.+)$/.exec(t); if(mg){ const id=Object.keys(D.GOVS).find(k=>D.GOVS[k].n===mg[1]); if(id) return learnSpec('gov',id); }
   const ev=ENG.EVS.find(e=>e.t===t); if(ev){ const sp=learnSpec('ev',ev); if(sp) return sp; }
   const m=/「(.+?)」/.exec(t); if(m){ const r=D.RELICS.find(x=>x.n===m[1]); if(r) return learnSpec('relic',r.id); }
   const w=D.WONDERS.find(x=>t.startsWith(x.n)); if(w) return learnSpec('wonder',w.id);
   const f=D.FIGS.find(x=>t.startsWith(x.n+' ')||t.startsWith(x.n+',')); if(f) return learnSpec('fig',f.id);
   const d=Object.keys(D.DISEASES).find(k=>t.startsWith(D.DISEASES[k].n)); if(d) return learnSpec('dis',d);
   return null; }
+const DOPEN=new Set(); document.addEventListener('toggle',e=>{ const d=e.target; if(d.dataset&&d.dataset.dk){ if(d.open) DOPEN.add(d.dataset.dk); else DOPEN.delete(d.dataset.dk); } },true);
+function histNote(key,note,sp,label){ return `<details class="hn" data-dk="${esc(key)}" ${DOPEN.has(key)?'open':''}><summary>${label||'역사 속에서'}</summary><p>${esc(note)}</p>${lbtn(sp)}</details>`; }
 const LMAP={}; function lbtn(sp){ if(!sp) return ''; const k=sp.q+'|'+sp.title; LMAP[k]=sp; return `<button class="lbtn" data-lr="${esc(k)}">사진·해설</button>`; }
 document.addEventListener('click',e=>{ const b=e.target.closest('[data-lr]'); if(!b) return; e.stopPropagation(); openLearn(LMAP[b.dataset.lr]); },true);
 
