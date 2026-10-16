@@ -27,6 +27,14 @@ body{background:var(--ink);color:var(--fg);font-family:var(--f-body);font-size:1
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.disl{height:142px;overflow:hidden}
+.cur .row{flex-wrap:nowrap;white-space:nowrap;gap:8px}
+.cur .row>*{overflow:hidden;text-overflow:ellipsis}
+.tcur{height:146px;box-sizing:border-box;overflow:hidden}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;height:3em;line-height:1.5}
+.epil{margin-top:6px;height:86px;overflow-y:auto}
+.dn{display:inline-block;text-align:right;white-space:nowrap}
 .serif{font-family:var(--f-display)}
 .muted{color:var(--muted)}
 [hidden]{display:none!important}
@@ -77,7 +85,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .zoomctl{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:4px;z-index:2}
 .zoomctl button{width:30px;height:30px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:5px;font-size:16px}
 .legend{position:absolute;right:12px;bottom:12px;background:rgba(13,19,24,.85);border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--fg2);z-index:2;max-width:260px}
-.res-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0}
+.res-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;height:28px;box-sizing:border-box;white-space:nowrap}
+.res-row>*{overflow:hidden;text-overflow:ellipsis}
+.res-row>.g{overflow:visible}
 .res-row .g{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:11px;color:#0d1318;flex:none}
 .res-row .g.off{background:#283036!important;border:1px solid currentColor}
 .legend .ramp{height:8px;border-radius:2px;margin:4px 0 2px;width:180px}
@@ -131,7 +141,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .row{display:flex;gap:10px;align-items:center}
 .slider{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
 .slider input{width:100%;accent-color:var(--gold)}
-.slider .row{justify-content:space-between;font-size:12.5px}
+.slider .row{justify-content:space-between;font-size:12.5px;white-space:nowrap}
 
 /* 차트 */
 .chart{position:relative;margin-top:6px}
@@ -182,9 +192,9 @@ select{background:var(--panel2);border:1px solid var(--line2);color:var(--fg);bo
 .war .h b{font-family:var(--f-display)}
 .war .meter{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:8px 0 4px;background:#0b1115}
 .war .meter i{display:block;height:100%}
-.nb{display:grid;grid-template-columns:12px 1fr auto auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}
+.nb{display:grid;grid-template-columns:12px minmax(0,1fr) 78px auto;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}
 .nb i{width:10px;height:10px;border-radius:2px}
-.nb .r{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.nb .r{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);text-align:right;white-space:nowrap}
 .nb button{padding:3px 8px;border:1px solid #5a2c26;border-radius:5px;font-size:11.5px;color:var(--seal2)}
 .nb button:disabled{opacity:.4}
 
@@ -3548,6 +3558,9 @@ let G=null, speed=0, lastSpeed=1, ff=false, modalOpen=false, tab='state', sel=-1
 // ── 형식 ──
 const fy=y=>ENG.fmtYear(y);
 const fdate=(g)=>`${fy(g.y)} ${g.m}월 ${g.d}일`;
+// 숫자 칸 고정: 명조체 숫자는 폭이 제각각이라(1이 좁다) 날짜·수치가 바뀔 때마다 글자가 움찔거린다. 숫자 묶음을 고정 폭 칸에 오른쪽 정렬로 넣는다.
+const tn=(str,min)=>String(str).replace(/\d+/g,d=>`<span class="dn" style="width:${(Math.max(d.length,min||0)*0.6).toFixed(2)}em">${d}</span>`);
+const fdateH=(g)=>`${tn(fy(g.y))} ${tn(g.m,2)}월 ${tn(g.d,2)}일`;
 const fpop=n=>ENG.fmtPop(n);
 function fmoney(n){ const a=Math.abs(n), s=n<0?'−':''; if(a>=1e12) return s+(a/1e12).toFixed(1)+'조'; if(a>=1e8) return s+(a/1e8).toFixed(a>=1e10?0:1)+'억'; if(a>=1e4) return s+(a/1e4).toFixed(a>=1e6?0:1)+'만'; return s+Math.round(a); }
 const pct=v=>(v*100).toFixed(0)+'%';
@@ -3821,7 +3834,7 @@ function setSpeed(s){ if(s>0) lastSpeed=s; speed=s; if(s===0) ff=false; updateTo
 function updateTop(){
   if(!G) return; const P=G.C[G.player];
   $('#pflag').style.background=P.col; $('#pname').textContent=P.name; $('#pgov').textContent=`${D.GOVS[P.gov].n}${P.ruler?' · '+P.ruler.name:''}`;
-  const dt=fdate(G); if($('#date').textContent!==dt) $('#date').textContent=dt;
+  const dt=fdateH(G); const de=$('#date'); if(de._h!==dt){ de._h=dt; de.innerHTML=dt; }
   $('#speeds').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.s===speed));
   $('#ff').textContent=ff?'■ 멈추기':'▶▶ 다음 사건'; $('#ff').classList.toggle('on',ff);
   const net=(P.income-P.expense)/12;
@@ -3976,19 +3989,19 @@ function realRef(P){
   return {n:'실제 한반도 인구 (추정)',t:D.STATS.koreaPop};
 }
 function paneHealth(P){
-  const san=P.san||0; const act=(G.epi||[]); const mine=act.filter(e=>Object.keys(e.inf).some(k=>G.owner[+k]===G.player));
+  const san=P.san||0; const act=(G.epi||[]); 
   const sc=ENG.sanCost(P); const full=(P.sanInv||0)>=2;
   const m=P.epiM&&P.epiM.until>G.day?P.epiM:null;
   const fx=d=>{ const f=ENG.epiFx(G,P,D.DISEASES[d]); return `감염 ×${f.inf.toFixed(2)} · 사망 ×${f.cfr.toFixed(2)}`; };
   return `<h4>보건 <span class="s">위생 수준이 높을수록 역병이 덜 번지고 덜 죽는다</span></h4>
-  <div class="cur"><div class="row" style="justify-content:space-between"><b class="serif" style="font-size:18px;color:${san>=3?'var(--good)':san>=1.5?'var(--warn)':'var(--bad)'}">위생 ${san.toFixed(1)} / 5</b><span class="sub">역병 사망 누계 ${fpop(P.epiDeaths||0)}</span></div>
+  <div class="cur"><div class="row" style="justify-content:space-between"><b class="serif" style="font-size:18px;color:${san>=3?'var(--good)':san>=1.5?'var(--warn)':'var(--bad)'}">위생 ${tn(san.toFixed(1))} / 5</b><span class="sub">역병 사망 누계 ${fpop(P.epiDeaths||0)}</span></div>
    <div class="bar"><i style="width:${san/5*100}%;background:#5caaa0"></i></div>
    <div class="sub" style="margin-top:6px">물로 옮는 병(장티푸스·콜레라): ${fx('cholera')}<br>숨으로 옮는 병(천연두·독감): ${fx('smallpox')}</div>
    <div class="sub">기술(의학·세균학·항생제…)·제도(공중위생·상하수도·검역·예방접종)·위생 사업이 위생 수준을 올린다.</div>
    <button class="btn" id="sanInv" style="width:100%;margin-top:8px" ${!full&&P.gold>=sc?'':'disabled'}>${full?'위생 사업 최대 (+2.0)':`위생 사업 (위생 +0.5, 유지비 GDP의 0.08%)`} <small>${full?'':fmoney(sc)}</small></button>
-   ${m?`<div class="sub" style="margin-top:4px">시행 중인 방역: 전파 ×${m.sp.toFixed(2)} · 유입 ×${m.in.toFixed(2)} · 사망 ×${m.dm.toFixed(2)} (${Math.ceil((m.until-G.day)/30)}개월 남음)</div>`:''}</div>
-  ${act.length?`<div style="margin-top:6px">${act.map(e=>{ const n=Object.keys(e.inf).length; const my=Object.keys(e.inf).filter(k=>G.owner[+k]===G.player).length; return `<div class="res-row"><span style="color:${my?'var(--bad)':'var(--muted)'}">●</span><span>${esc(e.n)}</span><span class="sub" style="margin-left:auto">${n}개 지방${my?` · 우리 땅 ${my}곳`:''} · 사망 ${fpop(e.deaths)}</span></div>`; }).join('')}</div>`:'<p class="sub">지금 세계에 크게 도는 역병은 없다.</p>'}
-  ${mine.length?`<p class="factline" style="border-color:var(--seal)">우리 땅에 역병이 돌고 있다. 지도 「보건」에서 퍼지는 모습을 볼 수 있다.</p>`:''}`;
+   <div class="sub one" style="margin-top:4px">${m?`시행 중인 방역: 전파 ×${m.sp.toFixed(2)} · 유입 ×${m.in.toFixed(2)} · 사망 ×${m.dm.toFixed(2)} (${Math.ceil((m.until-G.day)/30)}개월 남음)`:'시행 중인 방역 없음'}</div></div>
+  <div class="epil">${act.length?act.map(e=>{ const n=Object.keys(e.inf).length; const my=Object.keys(e.inf).filter(k=>G.owner[+k]===G.player).length; return `<div class="res-row"><span style="color:${my?'var(--bad)':'var(--muted)'}">●</span><span>${esc(e.n)}</span><span class="sub" style="margin-left:auto">${n}개 지방${my?` · 우리 땅 ${my}곳`:''} · 사망 ${fpop(e.deaths)}</span></div>`; }).join(''):'<p class="sub" style="margin:4px 0">지금 세계에 크게 도는 역병은 없다.</p>'}</div>
+`;
 }
 function paneNature(P){
   const kn=id=>P.techs.has(id); const rc=P.resCnt||{}; const keys=Object.keys(rc);
@@ -4002,10 +4015,10 @@ function paneNature(P){
   <p class="sub">자원을 가진 나라는 관련 기술(청동기·철기·증기기관·내연기관·반도체 등)을 20% 싸게 연구한다.</p>
   <h4>기후 <span class="s">1850–1900년 평균 대비 세계 기온</span></h4>
   <table class="cmp"><tr><th></th><th>당신의 세계</th><th>실제 역사</th></tr><tr><td>기온 편차</td><td>${T>=0?'+':''}${T.toFixed(2)}°C</td><td class="r">${TR>=0?'+':''}${TR.toFixed(2)}°C</td></tr></table>
-  ${cools.length?`<p class="sub">화산 냉각 중: ${cools.map(c=>`${esc(c.label)} ${c.dT}°C`).join(', ')}</p>`:''}
+  <p class="sub one">${cools.length?`화산 냉각 중: ${cools.map(c=>`${esc(c.label)} ${c.dT}°C`).join(', ')}`:'화산 냉각 없음'}</p>
   <p class="sub">추우면 고위도의 부양력이, +1°C를 넘게 더우면 열대의 부양력이 줄어든다. 1850년 이후 기온은 세계 경제의 화석연료 의존도를 따라 실제 역사보다 빨라지거나 느려진다.</p>
 <!--§--><div class="chart" id="ch3"></div><!--§-->
-  ${dis.length?`<h4>최근 재해·역병</h4>`+dis.map(d=>`<div class="res-row"><span class="badge" style="color:${d.t==='화산'?'#e0664f':d.t==='역병'?'#d65a4a':'#c3bcac'}">${d.t}</span><span>${fy(d.y)} ${esc(d.name)} <span class="muted">${d.t==='역병'?'':d.t==='화산'?'VEI '+d.M:'규모 '+d.M.toFixed(1)}</span></span><span class="num muted" style="margin-left:auto;font-size:12px">${fpop(d.deaths)}</span></div>`).join(''):''}`;
+  <h4>최근 재해·역병</h4><div class="disl">${dis.length?dis.map(d=>`<div class="res-row"><span class="badge" style="color:${d.t==='화산'?'#e0664f':d.t==='역병'?'#d65a4a':'#c3bcac'}">${d.t}</span><span>${fy(d.y)} ${esc(d.name)} <span class="muted">${d.t==='역병'?'':d.t==='화산'?'VEI '+d.M:'규모 '+d.M.toFixed(1)}</span></span><span class="num muted" style="margin-left:auto;font-size:12px">${fpop(d.deaths)}</span></div>`).join(''):'<p class="sub" style="margin:4px 0">아직 큰 재해가 없다.</p>'}</div>`;
 }
 function paneState(P){
   const R=P.ruler, age=R?G.y-R.born:0;
@@ -4035,7 +4048,7 @@ function paneState(P){
   <p class="factline">이 나라에서 태어난 아이 100명 중 <b>${Math.round(myU5*100)}명</b>은 다섯 살을 넘기지 못한다. 같은 해 실제 세계 평균은 ${Math.round(u5*100)}명이다.</p>
   ${real?`<p class="sub" style="margin:0 0 4px">「인구」 행의 오른쪽 칸은 ${real.n} 값이다.</p>`:''}
   <h4>부패 <span class="s">세수·생산·연구를 갉아먹는다</span></h4>
-  <div class="cur"><div class="row" style="justify-content:space-between"><b class="serif" style="font-size:18px;color:${P.corr>40?'var(--bad)':P.corr>20?'var(--warn)':'var(--good)'}">${Math.round(P.corr||0)}%</b><span class="sub">이대로면 ${Math.round(P.corrT||0)}%로 수렴</span></div>
+  <div class="cur"><div class="row" style="justify-content:space-between"><b class="serif" style="font-size:18px;color:${P.corr>40?'var(--bad)':P.corr>20?'var(--warn)':'var(--good)'}">${tn(Math.round(P.corr||0),2)}%</b><span class="sub">이대로면 ${Math.round(P.corrT||0)}%로 수렴</span></div>
    <div class="bar"><i style="width:${Math.min(100,P.corr||0)}%;background:${P.corr>40?'var(--seal)':'var(--warn)'}"></i></div>
    <div class="sub" style="margin-top:6px">세수 −${Math.round((P.corr||0)*0.6)}% · 생산 −${Math.round((P.corr||0)*0.25)}% · 연구 −${Math.round((P.corr||0)*0.25)}%</div>
    <div class="sub">군대 유지비 ×${(P.armyMul_||1).toFixed(2)} — 부패가 클수록 군량과 군포가 중간에서 새어 나가 급격히 불어난다.</div>
@@ -4044,7 +4057,7 @@ function paneState(P){
    <div class="sub" style="margin-top:4px">영토가 넓을수록 척결 비용이 커진다 (지방 ${P.prov}곳 → 비용 ×${(1+P.prov/12).toFixed(1)}).</div></div>
   ${paneHealth(P)}
   <h4>항구 교역 <span class="s">GDP의 ${P.gdp>0?((P.portIncome||0)/P.gdp*100).toFixed(1):0}%</span></h4>
-  <p class="sub" style="margin-top:0">항구 ${P.portN||0}곳 · 연 교역 수입 ${fmoney(P.portIncome||0)}. 항구 등급 × 적합도(해안선 길이, 바다 이웃, 결빙, 옛 항구 도시)만큼 수입이 생긴다. 항구가 있는 해안은 바다 건너 병참도 쉽다.</p>
+  <p class="sub one" style="margin:0">항구 ${P.portN||0}곳 · 연 교역 수입 ${fmoney(P.portIncome||0)}</p><p class="sub" style="margin-top:0">항구 등급 × 적합도(해안선 길이, 바다 이웃, 결빙, 옛 항구 도시)만큼 수입이 생긴다. 항구가 있는 해안은 바다 건너 병참도 쉽다.</p>
   ${paneNature(P)}
   <h4>군대 <span class="s">인구 대비 상비 병력 비율</span></h4>
   <div class="slider"><div class="row"><span>동원율</span><b class="num" id="mobv">${(P.mob*100).toFixed(1)}%</b></div>
@@ -4077,10 +4090,10 @@ function paneTech(P){
   const eraH=D.ERA_NAMES.map((n,e)=>`<div class="eh" style="left:${left0+e*CW}px">${n}</div>`).join('');
   const catH=catKeys.map(k=>`<div class="ch" style="top:${catY[k][0]+4}px" title="${D.CATS[k].n}">${D.CATS[k].g}</div>`).join('');
   return `
-  <div class="cur">${cur?`<div class="row" style="justify-content:space-between"><b class="serif">${esc(cur.n)}</b><span class="num sub">${pct(clamp(P.prog/cost,0,1))}</span></div>
-    <div class="sub">${esc(cur.d)} · 실제 등장 ${fy(cur.h)}</div><div class="sub">${esc(fxStr(cur.fx))||'직접 효과 없음 (다음 기술로 가는 길)'}</div>
+  <div class="cur tcur">${cur?`<div class="row" style="justify-content:space-between"><b class="serif">${esc(cur.n)}</b><span class="num sub">${pct(clamp(P.prog/cost,0,1))}</span></div>
+    <div class="sub clamp2">${esc(cur.d)} · 실제 등장 ${fy(cur.h)}</div><div class="sub one" title="${esc(fxStr(cur.fx))}">${esc(fxStr(cur.fx))||'직접 효과 없음 (다음 기술로 가는 길)'}</div>
     <div class="bar"><i style="width:${clamp(P.prog/cost,0,1)*100}%"></i></div>
-    <div class="sub" style="margin-top:4px">하루 연구 ${rr.toFixed(1)} · 남은 기간 약 ${left>730?(left/365).toFixed(1)+'년':Math.round(left)+'일'}</div>`:'<span class="sub">연구할 기술을 고르라. 고르지 않으면 「연구 방향」에 따라 자동으로 고른다.</span>'}</div>
+    <div class="sub one" style="margin-top:4px">하루 연구 ${rr.toFixed(1)} · 남은 기간 약 ${left>730?(left/365).toFixed(1)+'년':Math.round(left)+'일'}</div>`:'<span class="sub">연구할 기술을 고르라. 고르지 않으면 「연구 방향」에 따라 자동으로 고른다.</span>'}</div>
   <h4>연구 방향 <span class="s">자동 선택 시 이 분야를 우선한다</span></h4>
   <div class="focus" id="focus"><button class="chip ${!P.focus?'on':''}" data-c="">균형</button>${Object.entries(D.CATS).map(([k,c])=>`<button class="chip ${P.focus===k?'on':''}" data-c="${k}">${c.n}</button>`).join('')}</div>
   <h4>기술 계보 <span class="s">보유 ${known.size} / ${D.TECH_LIST.length} · 금테 = 지금 연구할 수 있음 · 같은 해 역사 평균 ${ENG.expectedTech(G.y)}개</span></h4>
