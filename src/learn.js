@@ -64,14 +64,14 @@ D.WIKI_EV = {
 Object.assign(D.WIKI_EV, D.WIKI_EV_KR||{});
 
 // ── 기술: 위키백과 문서 ──
-const TW={fire:'?불의 이용 인류 역사',stone:'간석기',lang:'언어',hunt:'수렵',fish:'어업',pottery:'토기',agri:'?농업의 기원 신석기 혁명',domest:'가축화',spirit:'애니미즘',village:'?신석기 시대 정착 마을',
- boat:'?통나무배',weave:'직조',copper:'?구리 야금 역사',irrig:'관개',wheel:'바퀴',bronze:'청동기 시대',writing:'문자',calendar:'역법',masonry:'?석조 건축',sail:'돛',horse:'?말의 가축화',chariot:'?전차 고대 전투용 수레',
- math:'?수학의 역사',law:'함무라비 법전',iron:'철기 시대',currency:'화폐',astro:'?천문학의 역사',roads:'?로마 가도',philo:'철학',crossbow:'쇠뇌',medicine:'?의학의 역사',eng:'?로마 수도교',bureau:'관료제',
- religion:'?세계 종교',paper:'종이',stirrup:'등자',watermill:'물레방아',exam:'과거제',woodprint:'목판 인쇄',feudal:'봉건제',threefield:'?삼포식 농법',castle:'?성 축성',gunpowder:'화약',compass:'나침반',
- guilds:'길드',univ:'?볼로냐 대학교',banking:'은행',metaltype:'금속활자',cannon:'대포',navig:'대항해시대',movable:'?구텐베르크 인쇄기',firearms:'화승총',milrev:'?군사 혁명 근세',newcrops:'?콜럼버스의 교환',
+const TW={fire:'?불의 이용 인류 역사',stone:'간석기',lang:'언어',hunt:'수렵',fish:'어업',pottery:'토기',agri:'?농업의 기원 신석기 혁명',domest:'가축화',spirit:'애니미즘',village:'차탈회위크',
+ boat:'?통나무배',weave:'직조',copper:'구리',irrig:'관개',wheel:'바퀴',bronze:'청동기 시대',writing:'문자',calendar:'역법',masonry:'고대 이집트 건축',sail:'돛',horse:'말',chariot:'?전차 고대 전투용 수레',
+ math:'?수학의 역사',law:'함무라비 법전',iron:'철기 시대',currency:'화폐',astro:'?천문학의 역사',roads:'아피아 가도',philo:'철학',crossbow:'쇠뇌',medicine:'?의학의 역사',eng:'?로마 수도교',bureau:'관료제',
+ religion:'?세계 종교',paper:'종이',stirrup:'등자',watermill:'물레방아',exam:'과거제',woodprint:'목판 인쇄',feudal:'봉건제',threefield:'모내기',castle:'성곽',gunpowder:'화약',compass:'나침반',
+ guilds:'길드',univ:'?볼로냐 대학교',banking:'은행',metaltype:'금속활자',cannon:'대포',navig:'대항해시대',movable:'?구텐베르크 인쇄기',firearms:'화승총',milrev:'상비군',newcrops:'?콜럼버스의 교환',
  jointst:'주식회사',scimeth:'과학적 방법',physics:'고전역학',enlight:'계몽주의',cokeiron:'?코크스 제철',steam:'증기 기관',vaccine:'백신',textile:'?방적기 산업 혁명',chem:'?화학의 역사',consti:'입헌주의',
- nation:'민족주의',steamship:'증기선',rail:'철도',elec:'전기',telegraph:'전신',social:'사회주의',rifle:'?강선 소총',steel:'강철',germ:'세균설',massedu:'의무 교육',phone:'전화기',combust:'내연기관',
- fert:'?하버-보슈법',radio:'무선 통신',flight:'비행기',assembly:'?조립 라인 포드',armor:'?전차 (무기)',democ:'민주주의',antibio:'항생제',nucphys:'핵물리학',rocket:'로켓',nuke:'핵무기',computer:'컴퓨터',
+ nation:'민족주의',steamship:'증기선',rail:'철도',elec:'전기',telegraph:'전신',social:'사회주의',rifle:'?강선 소총',steel:'강철',germ:'세균학',massedu:'의무 교육',phone:'전화기',combust:'내연기관',
+ fert:'?하버-보슈법',radio:'무선 통신',flight:'비행기',assembly:'?조립 라인 포드',armor:'마크 I 전차',democ:'민주주의',antibio:'항생제',nucphys:'핵물리학',rocket:'로켓',nuke:'핵무기',computer:'컴퓨터',
  welfare:'복지 국가',nucpower:'원자력 발전',container:'?컨테이너선',satellite:'인공위성',semicon:'반도체',greenrev:'녹색 혁명',internet:'인터넷',mobile:'휴대 전화',genome:'인간 유전체 프로젝트',
  renew:'재생 가능 에너지',ai:'인공지능',ev:'전기자동차',biotech:'생명공학',quantum:'양자 컴퓨터',space:'?우주 개발 민간',carbon:'탄소 중립',fusion:'핵융합 발전',longev:'?노화 연구 수명 연장',agi:'범용 인공지능',mars:'?화성 유인 탐사'};
 for(const t of D.TECH_LIST) t.wiki=TW[t.id]||t.n;
